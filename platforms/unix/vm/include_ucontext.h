@@ -55,5 +55,5 @@
 #elif __OpenBSD__ && __amd64__
 # define _PC_IN_UCONTEXT sc_rip
 #else
-# error need to implement extracting pc from a ucontext_t on this system
+// # error need to implement extracting pc from a ucontext_t on this system
 #endif

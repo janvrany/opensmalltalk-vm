@@ -1,6 +1,5 @@
 # Copied, perhaps edited, from ../../src/examplePlugins.int
 INTERNAL_PLUGINS = \
-ADPCMCodecPlugin \
 AioPlugin \
 AsynchFilePlugin \
 B2DPlugin \
@@ -16,7 +15,6 @@ FileCopyPlugin \
 FilePlugin \
 FloatArrayPlugin \
 FloatMathPlugin \
-IA32ABI \
 JoystickTabletPlugin \
 JPEGReaderPlugin \
 JPEGReadWriter2Plugin \

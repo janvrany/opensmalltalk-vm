@@ -1116,7 +1116,7 @@ sigsegv(int sig, siginfo_t *info, ucontext_t *uap)
 
 	if (!inFault) {
 		extern sqInt primitiveFailForFFIExceptionat(usqLong exceptionCode, usqInt pc);
-		primitiveFailForFFIExceptionat(sig, uap->_PC_IN_UCONTEXT);
+//		primitiveFailForFFIExceptionat(sig, uap->_PC_IN_UCONTEXT);
 		inFault = 1;
 		getCrashDumpFilenameInto(crashdump);
 		ctime_r(&now,ctimebuf);

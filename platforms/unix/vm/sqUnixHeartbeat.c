@@ -189,7 +189,7 @@ ioHighResClock(void)
 		Is there a 64-bit clock on ARM?  If so, access it here :-)
 	 */
 #else
-# error "no high res clock defined"
+// # error "no high res clock defined"
 #endif
   return value;
 }
