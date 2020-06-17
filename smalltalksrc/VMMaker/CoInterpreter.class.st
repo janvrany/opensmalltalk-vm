@@ -4247,6 +4247,11 @@ CoInterpreter >> iframeSavedIP: theFP put: savedIP [
 	stackPages longAt: theFP + FoxIFSavedIP put: savedIP
 ]
 
+{ #category : #crap }
+CoInterpreter >> inGUIThread [
+	^false
+]
+
 { #category : #initialization }
 CoInterpreter >> initStackPagesAndInterpret [
 	"Initialize the stack pages and enter interpret. Use alloca'ed memory so that when

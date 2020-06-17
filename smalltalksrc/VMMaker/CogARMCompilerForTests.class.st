@@ -28,7 +28,7 @@ CogARMCompilerForTests class >> registers [
 { #category : #'test support' }
 CogARMCompilerForTests class >> registersWithNamesDo: aBinaryBlock [
 	self registers
-		with: #('r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7' 'r8' 'r9' 'sl' 'fp' 'ip' 'sp' 'lr' 'pc')
+		with: #('a1' 'a2' 'a3' 'a4' 'v1' 'v2' 'v3' 'wr' 'v5' 'sb' 'sl' 'fp' 'ip' 'sp' 'lr' 'pc')
 		do: aBinaryBlock
 ]
 

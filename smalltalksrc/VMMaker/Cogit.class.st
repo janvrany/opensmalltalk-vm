@@ -832,7 +832,7 @@ Cogit class >> generatorTableFrom: anArray [
 
 { #category : #accessing }
 Cogit class >> guardPageSize [
-	^1024
+	^16r20000
 ]
 
 { #category : #translation }
@@ -1036,10 +1036,10 @@ Cogit class >> initializeMiscConstants [
 				[EagerInstructionDecoration := false]]. "speeds up single stepping but could lose fidelity"
 
 	ProcessorClass := (InitializationOptions at: #ISA ifAbsentPut: [self objectMemoryClass defaultISA]) caseOf: {
-							[#X64] 		->	[BochsX64Alien].
-							[#IA32] 	->	[BochsIA32Alien].
-							[#ARMv5]	->	[GdbARMAlien].
-							[#MIPSEL]	->	[MIPSELSimulator] }.
+							[#X64] 		->	[#XXXBochsX64Alien].
+							[#IA32] 	->	[#XXXBochsIA32Alien].
+							[#ARMv5]	->	[TargetAwareARM].
+							[#MIPSEL]	->	[#XXXMIPSELSimulator] }.
 	CogCompilerClass := self activeCompilerClass.
 	(CogCompilerClass withAllSuperclasses copyUpTo: CogAbstractInstruction) reverseDo:
 		[:compilerClass| compilerClass initialize; initializeAbstractRegisters].
@@ -8504,13 +8504,11 @@ Cogit >> halt: aString [
 Cogit >> handleABICallOrJumpSimulationTrap: aProcessorSimulationTrap evaluable: evaluable [
 	<doNotGenerate>
 
-	self assert: aProcessorSimulationTrap type = #call.
+	self assert: aProcessorSimulationTrap type = #controlTransfer.
 	processor
-		simulateLeafCallOf: aProcessorSimulationTrap address
-		nextpc: aProcessorSimulationTrap nextpc
-		memory: coInterpreter memory.
+		simulateBuildFrameIn: coInterpreter memory for: evaluable.
 	self recordInstruction: {'(simulated call of '. aProcessorSimulationTrap address. '/'. evaluable selector. ')'}.
-	((printRegisters or: [printInstructions]) and: [clickConfirm]) ifTrue:
+	clickConfirm ifTrue:
  		[(self confirm: 'skip run-time call?') ifFalse:
 			[clickConfirm := false. self halt]].
 	evaluable valueWithArguments: (processor
@@ -8519,7 +8517,7 @@ Cogit >> handleABICallOrJumpSimulationTrap: aProcessorSimulationTrap evaluable: 
 	self recordInstruction: {'(simulated return to '. processor retpcIn: coInterpreter memory. ')'}.
 	processor
 		smashABICallerSavedRegistersWithValuesFrom: 16r80000000 by: objectMemory wordSize;
-		simulateLeafReturnIn: coInterpreter memory
+		simulateReturnIn: coInterpreter memory
 ]
 
 { #category : #'simulation only' }
@@ -8631,6 +8629,87 @@ Cogit >> handleSimulationTrap: aProcessorSimulationTrap [
 		  [#write] -> [self handleWriteSimulationTrap: aProcessorSimulationTrap].
 		  [#call] -> [self handleCallOrJumpSimulationTrap: aProcessorSimulationTrap].
 		  [#jump] -> [self handleCallOrJumpSimulationTrap: aProcessorSimulationTrap] }
+]
+
+{ #category : #'simulation only' }
+Cogit >> handleTransferSimulationTrap: aProcessorSimulationTrap [
+	<doNotGenerate>
+	| evaluable function memory result savedFramePointer savedStackPointer savedArgumentCount |
+
+	evaluable := simulatedTrampolines
+					at: aProcessorSimulationTrap address
+					ifAbsent: [self errorProcessingSimulationTrap: aProcessorSimulationTrap
+								in: simulatedTrampolines].
+	function := evaluable isBlock
+					ifTrue: ['aBlock; probably some plugin primitive']
+					ifFalse:
+						[evaluable receiver == backEnd ifTrue:
+							[^self handleABICallOrJumpSimulationTrap: aProcessorSimulationTrap evaluable: evaluable].
+						 evaluable selector].
+	function ~~ #ceBaseFrameReturn: ifTrue:
+		[coInterpreter assertValidExternalStackPointers].
+	(backEnd wantsNearAddressFor: function) ifTrue:
+		[^self perform: function with: aProcessorSimulationTrap].
+	memory := coInterpreter memory.
+	processor simulateBuildFrameIn: memory for: evaluable.
+	function == #interpret ifTrue: "i.e. we're here via ceInvokeInterpret and should discard all state back to enterSmalltalkExecutiveImplementation"
+		[coInterpreter reenterInterpreter].
+	
+	savedFramePointer := coInterpreter framePointer.
+	savedStackPointer := coInterpreter stackPointer.
+	savedArgumentCount := coInterpreter argumentCount.
+	result := ["self halt: evaluable selector."
+		   	   clickConfirm ifTrue:
+			 	[(self confirm: 'skip run-time call?') ifFalse:
+					[clickConfirm := false. self halt]].
+			   evaluable valueWithArguments: (processor
+												postCallArgumentsNumArgs: evaluable numArgs
+												in: memory)]
+				on: ReenterMachineCode
+				do: [:ex| ex return: #continueNoReturn].
+			
+	coInterpreter assertValidExternalStackPointers.
+	"Verify the stack layout assumption compileInterpreterPrimitive: makes, provided we've
+	 not called something that has built a frame, such as closure value or evaluate method, or
+	 switched frames, such as primitiveSignal, primitiveWait, primitiveResume, primitiveSuspend et al."
+	(function beginsWith: 'primitive') ifTrue:
+		[coInterpreter primFailCode = 0
+			ifTrue: [(#(	primitiveClosureValue primitiveClosureValueWithArgs primitiveClosureValueNoContextSwitch
+						primitiveFullClosureValue primitiveFullClosureValueWithArgs primitiveFullClosureValueNoContextSwitch
+						primitiveSignal primitiveWait primitiveResume primitiveSuspend primitiveYield
+						primitiveExecuteMethodArgsArray primitiveExecuteMethod
+						primitivePerform primitivePerformWithArgs primitivePerformInSuperclass
+						primitiveTerminateTo primitiveStoreStackp primitiveDoPrimitiveWithArgs)
+							includes: function) ifFalse:
+						["This is a rare case (e.g. in Scorch where a married context's sender is set to nil on trapTrpped and hence the stack layout is altered."
+						 (function == #primitiveSlotAtPut and: [objectMemory isContext: (coInterpreter frameReceiver: coInterpreter framePointer)]) ifFalse:
+							[self assert: savedFramePointer = coInterpreter framePointer.
+							 self assert: savedStackPointer + (savedArgumentCount * objectMemory wordSize)
+									= coInterpreter stackPointer]]]
+			ifFalse:
+				[self assert: savedFramePointer = coInterpreter framePointer.
+				 self assert: savedStackPointer = coInterpreter stackPointer]].
+	result ~~ #continueNoReturn ifTrue:
+		[self recordInstruction: {'(simulated return to '. processor retpcIn: memory. ')'}.
+			processor simulateReturnIn: memory.
+		 processor smashCallerSavedRegistersWithValuesFrom: 16r80000000 by: objectMemory wordSize in: memory].
+	self assert: (result isInteger "an oop result"
+			or: [result == coInterpreter
+			or: [result == objectMemory
+			or: [#(nil continue continueNoReturn) includes: result]]]).
+	processor cResultRegister: (result
+							ifNil: [0]
+							ifNotNil: [result isInteger
+										ifTrue: [result]
+										ifFalse: [16rF00BA222]])
+
+	"coInterpreter cr.
+	 processor sp + 32 to: processor sp - 32 by: -4 do:
+		[:sp|
+		 sp = processor sp
+			ifTrue: [coInterpreter print: 'sp->'; tab]
+			ifFalse: [coInterpreter printHex: sp].
+		 coInterpreter tab; printHex: (coInterpreter longAt: sp); cr]"
 ]
 
 { #category : #'simulation only' }
@@ -8768,8 +8847,8 @@ Cogit >> initializeCodeZoneFrom: startAddress upTo: endAddress [
 	backEnd stopsFrom: startAddress to: endAddress - 1.
 	self cCode: [self sqMakeMemoryExecutableFrom: startAddress To: endAddress]
 		inSmalltalk:
-			[startAddress = self class guardPageSize ifTrue:
-				[backEnd stopsFrom: 0 to: endAddress - 1].
+			[     "startAddress = self class guardPageSize ifTrue:
+				[backEnd stopsFrom: 0 to: endAddress - 1]."
 			 self initializeProcessor].
 	codeBase := methodZoneBase := startAddress.
 	minValidCallAddress := (codeBase min: coInterpreter interpretAddress)
@@ -12090,7 +12169,12 @@ Cogit >> simulateCogCodeAt: address [ "<Integer>"
 			[clickConfirm := false. self halt]]."
 	   true] whileTrue]
 		on: ProcessorSimulationTrap
-		do: [:ex| self handleSimulationTrap: ex].
+		do: [:ex|
+			ex type == #read ifTrue:
+				[self handleReadSimulationTrap: ex. ex resume: processor].
+			ex type == #write ifTrue:
+		 		[self handleWriteSimulationTrap: ex. ex resume: processor].
+			self handleTransferSimulationTrap: ex].
 	 true] whileTrue
 ]
 
@@ -12130,18 +12214,26 @@ Cogit >> simulateEnilopmart: enilopmartAddress numArgs: n [
 Cogit >> simulateLeafCallOf: someFunction [
 	"Simulate execution of machine code that leaf-calls someFunction,
 	 answering the result returned by someFunction."
+	"CogProcessorAlienInspector openFor: coInterpreter"
 	<doNotGenerate>
-	| spOnEntry |
+	| priorSP priorPC priorLR spOnEntry bogusRetPC |
+
 	self recordRegisters.
+	priorSP := processor sp.
+	priorPC := processor pc.
+	priorLR := backEnd hasLinkRegister ifTrue: [processor lr].
 	processor
+		setFramePointer: coInterpreter getCFramePointer stackPointer: coInterpreter getCStackPointer;
 		simulateLeafCallOf: someFunction
-		nextpc: 16rBADF00D5
+		nextpc: (bogusRetPC := 16rBADF00D5 roundTo: backEnd codeGranularity)
 		memory: coInterpreter memory.
 	spOnEntry := processor sp.
 	self recordInstruction: {'(simulated call of '. someFunction. ')'}.
 	[[processor pc between: 0 and: methodZone zoneEnd] whileTrue:
-		[singleStep
-			ifTrue: [self recordProcessing.
+		[[singleStep
+			ifTrue: [
+					self recordProcessing.
+					self maybeBreakAt: processor pc.
 					processor
 						singleStepIn: coInterpreter memory
 						minimumAddress: guardPageSize
@@ -12149,18 +12241,31 @@ Cogit >> simulateLeafCallOf: someFunction [
 			ifFalse: [processor
 						runInMemory: coInterpreter memory
 						minimumAddress: guardPageSize
-						readOnlyBelow: methodZone zoneEnd]]]
-		on: ProcessorSimulationTrap
-		do: [:ex| | retpc |
-			"If the ip is out of bounds the return has already occurred."
-			((processor pc between: 0 and: methodZone zoneEnd)
-			 and: [processor sp <= spOnEntry]) ifTrue:
-				[retpc := processor leafRetpcIn: coInterpreter memory.
-				 self assert: retpc = 16rBADF00D5.
-				 self recordInstruction: {'(simulated return to '. retpc. ')'.
-				 processor simulateLeafReturnIn: coInterpreter memory}.
-				 self recordRegisters]].
-	^processor cResultRegister
+						readOnlyBelow: methodZone zoneEnd]]
+			on: ProcessorSimulationTrap, Error
+			do: [:ex| | retpc |
+				processor pc = bogusRetPC ifTrue:
+					[self recordInstruction: {'(simulated (real) return to '. processor pc. ')'}.
+					 ^processor cResultRegister].
+				ex class == ProcessorSimulationTrap ifTrue:
+					[ex type == #read ifTrue:
+						[self handleReadSimulationTrap: ex. ex resume: processor].
+					 ex type == #write ifTrue:
+		 				[self handleWriteSimulationTrap: ex. ex resume: processor].
+					 ex type == #return ifTrue:
+						[retpc := processor leafRetpcIn: coInterpreter memory.
+						 self assert: retpc = bogusRetPC.
+						 processor simulateLeafReturnIn: coInterpreter memory.
+						 self recordInstruction: {'(simulated return to '. retpc. ')'}.
+						 ^processor cResultRegister]].
+				ex pass]].
+	processor pc = bogusRetPC ifTrue:
+		[self recordInstruction: {'(simulated (real) return to '. processor pc. ')'}].
+	^processor cResultRegister]
+		ensure:
+			[processor sp: priorSP.
+			 processor pc: priorPC.
+			 priorLR ifNotNil: [:lr| processor lr: lr]]
 ]
 
 { #category : #'simulation processor access' }

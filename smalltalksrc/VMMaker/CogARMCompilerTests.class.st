@@ -54,9 +54,7 @@ CogARMCompilerTests >> objectMemory [
 
 { #category : #accessing }
 CogARMCompilerTests >> processor [
-	processor ifNil:
-		[processor := GdbARMAlien new].
-	^processor
+	^Booo
 ]
 
 { #category : #accessing }
@@ -83,9 +81,9 @@ CogARMCompilerTests >> testAdd [
 				In: inst
 				into: [:str :sz| | plainJane herIntended |
 					plainJane := self strip: str.
-					herIntended := 'adds	', regName, ', ', regName, ', #', n asString.
+					herIntended := 'adds ', regName, ', ', regName, ', #', n asString.
 					self assert: herIntended equals: plainJane]]].
-		
+
 	"test AddCwR"
 	self concreteCompilerClass registersWithNamesDo: [ :reg :regName |
 		#(16rFFFFFFFF 16r88888888 0) do:
@@ -97,35 +95,35 @@ CogARMCompilerTests >> testAdd [
 				In: inst
 				into: [:str :sz| | plainJane herIntended |
 					plainJane := self strip: str.
-					herIntended := 'mov	ip, #', (n bitAnd: 16rFF << 24) signedIntFromLong asString.
+					herIntended := 'mov ip, #', (n bitAnd: 16rFF << 24) signedIntFromLong asString.
 					self assert: herIntended equals: plainJane].
 			self
 				disassembleInstructionAt: 4
 				In: inst
 				into: [:str :sz| | plainJane herIntended |
 					plainJane := self strip: str.
-					herIntended := 'orr	ip, ip, #', (n bitAnd: 16rFF << 16) asString.
+					herIntended := 'orr ip, ip, #', (n bitAnd: 16rFF << 16) asString.
 					self assert: herIntended equals: plainJane].
 			self
 				disassembleInstructionAt: 8
 				In: inst
 				into: [:str :sz| | plainJane herIntended |
 					plainJane := self strip: str.
-					herIntended := 'orr	ip, ip, #', (n bitAnd: 16rFF << 8) signedIntFromLong asString.
+					herIntended := 'orr ip, ip, #', (n bitAnd: 16rFF << 8) signedIntFromLong asString.
 					self assert: herIntended equals: plainJane].
 			self
 				disassembleInstructionAt: 12
 				In: inst
 				into: [:str :sz| | plainJane herIntended |
 					plainJane := self strip: str.
-					herIntended := 'orr	ip, ip, #', (n bitAnd: 16rFF) asString.
+					herIntended := 'orr ip, ip, #', (n bitAnd: 16rFF) asString.
 					self assert: herIntended equals: plainJane].
 			self
 				disassembleInstructionAt: 16
 				In: inst
 				into: [:str :sz| | plainJane herIntended |
 					plainJane := self strip: str.
-					herIntended := 'adds	', regName, ', ', regName, ', ip'.
+					herIntended := 'adds ', regName, ', ', regName, ', ip'.
 					self assert: herIntended equals: plainJane]]]
 
 ]
@@ -257,22 +255,16 @@ CogARMCompilerTests >> testPushR [
 ]
 
 { #category : #tests }
+CogARMCompilerTests >> testRet0 [
+	| inst len |
+	inst := self gen: RetN operand: 0.
+	len := inst concretizeAt: 0.
+	self assert: len equals: 4.
+	self assert: (inst machineCode long32At: 0) equals: 16rE1A0F00E
+]
+
+{ #category : #tests }
 CogARMCompilerTests >> testRetN [
-	"self new testRetN"
-	
-	#(0) do:
-		[:n| | inst len |
-		inst := self gen: RetN operand: n.
-		len := inst concretizeAt: 0.
-		self
-			disassembleInstructionAt: 0
-			In: inst
-			into: [:str :sz| | plainJane  |
-				"Convert e.g. '00000000: movl %eax, 0x2(%eax) : 89 40 02' to  'movl %eax, 0x2(%eax)'"
-				plainJane := self strip: str.
-				self assert: (plainJane match: 'mov	pc, lr').
-				self assert: len = sz]].
-	
 	#(1 2 3 4 5 6 7) do:
 		[:n| | inst len |
 		inst := self gen: RetN operand: n * 4.
@@ -282,14 +274,14 @@ CogARMCompilerTests >> testRetN [
 			In: inst
 			into: [:str :sz| | plainJane herIntended |
 				plainJane := self strip: str.
-				herIntended := 'add	sp, sp, #', (n * 4 )asString.
+				herIntended := 'add sp, sp, #', (n * 4) asString.
 				self assert: herIntended equals: plainJane].
 		self
 			disassembleInstructionAt: 4
 			In: inst
 			into: [:str :sz| | plainJane |
 				plainJane := self strip: str.
-				self assert: (plainJane match: 'mov	pc, lr').		
+				self assert: (plainJane match: 'mov pc, lr').		
 		self assert: len = 8]]
 ]
 

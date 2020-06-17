@@ -1166,14 +1166,6 @@ CoInterpreterMT >> primitiveRelinquishProcessor [
 ]
 
 { #category : #'I/O primitives' }
-CoInterpreterMT >> primitiveScreenSize [
-
-	self inGUIThread ifFalse: [ 
-		^ self primitiveFailFor: PrimErrInappropriate ].
-	^ super primitiveScreenSize
-]
-
-{ #category : #'I/O primitives' }
 CoInterpreterMT >> primitiveShowDisplayRect [
 
 	self inGUIThread ifFalse: [ 

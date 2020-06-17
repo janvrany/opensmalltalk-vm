@@ -573,12 +573,20 @@ SpurSegmentManager >> readHeapFrom: f at: location dataBytes: numBytes [
 				File: numBytes
 				Read: f]
 		inSmalltalk:
-			[| bytesPerElement |
-			 bytesPerElement := manager memory bytesPerElement.
+			[
+			 "| bytesPerElement |  
+			 bytesPerElement := manager memory class bytesPerElement.
 			 (f	readInto: manager memory
 				startingAt: location // bytesPerElement + 1
 				count: numBytes // bytesPerElement)
-			  * bytesPerElement]
+			  * bytesPerElement."
+			
+			
+			manager memory
+			fillFromStream: f startingAt: location count: numBytes
+						
+			
+			]
 ]
 
 { #category : #snapshot }

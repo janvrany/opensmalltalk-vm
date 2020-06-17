@@ -742,9 +742,14 @@ Spur32BitMemoryManager >> maxSmallInteger [
 { #category : #simulation }
 Spur32BitMemoryManager >> memoryClass [
 	<doNotGenerate>
-	^self endianness == #little
+	^Gem5SharedRAM 
+	
+	"^self endianness == #little
 		ifTrue: [LittleEndianBitmap]
-		ifFalse: [Bitmap]
+		ifFalse: [Bitmap]"
+	
+	
+
 ]
 
 { #category : #'interpreter access' }

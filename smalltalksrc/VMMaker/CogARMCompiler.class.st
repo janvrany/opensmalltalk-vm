@@ -109,6 +109,11 @@ CogARMCompiler class >> VarBaseReg [
 	^ConcreteVarBaseReg
 ]
 
+{ #category : #'TA Assembler' }
+CogARMCompiler class >> compiler [
+	^super compiler addPlugin: PDLOpalPlugin 
+]
+
 { #category : #translation }
 CogARMCompiler class >> defaultCompilerClass [
 	^CogOutOfLineLiteralsARMCompiler
@@ -287,6 +292,11 @@ CogARMCompiler class >> specificOpcodes [
 	"Answer the processor-specific opcodes for this class.
 	 They're all in an Array literal in the initialize method."
 	^(self class >> #initialize) literals detect: [:l| l isArray and: [l includes: #LDMFD]]
+]
+
+{ #category : #'TA Assembler' }
+CogARMCompiler class >> template [
+	^CogARMCompiler >> #templateMethod
 ]
 
 { #category : #translation }
@@ -1682,6 +1692,7 @@ CogARMCompiler >> concretizePushR [
 
 { #category : #'generate machine code - concretize' }
 CogARMCompiler >> concretizeRetN [
+"ELIOT VERSION"
 	"Will get inlined into concretizeAt: switch."
 	<var: #offset type: #sqInt>
 	<inline: true>
@@ -1780,6 +1791,19 @@ CogARMCompiler >> concretizeTstCqR [
 			^machineCodeSize := 4]
 		ifFalse: [^self concretizeDataOperationCwR: TstOpcode].
 	^0 "to keep Slang happy"
+]
+
+{ #category : #'generate machine code - concretize' }
+CogARMCompiler >> concretizzeRet0 [
+	<armv5: 'mov pc, lr'>
+]
+
+{ #category : #'generate machine code - concretize' }
+CogARMCompiler >> concretizzeRetN [
+	<operands: #(offset)>
+	<armv5: 'add sp, sp, #{offset}'>
+	<armv5: 'mov pc, lr'>
+
 ]
 
 { #category : #encoding }
@@ -2359,6 +2383,11 @@ CogARMCompiler >> generalPurposeRegisterMap [
 			#r10. R10.
 			#r11. R11.
 			#r12. R12	}
+]
+
+{ #category : #'generate machine code - concretize' }
+CogARMCompiler >> getOperand: i [
+	^operands at: i-1
 ]
 
 { #category : #testing }
@@ -3218,6 +3247,15 @@ CogARMCompiler >> shiftSetsConditionCodesFor: aConditionalJumpOpcode [
 		otherwise: [self halt: 'unhandled opcode in setsConditionCodesFor:'. false]
 ]
 
+{ #category : #'TA Assembler' }
+CogARMCompiler >> spitAll: bvs [
+	machineCodeSize := 0.
+	bvs do: [ :bv |
+		self machineCodeAt: machineCodeSize put: bv value.
+		machineCodeSize := machineCodeSize + 4 ].
+	^machineCodeSize
+]
+
 { #category : #accessing }
 CogARMCompiler >> stackPageInterruptHeadroomBytes [
 	"Return a minimum amount of headroom for each stack page (in bytes).  In a
@@ -3304,6 +3342,15 @@ CogARMCompiler >> subs: destReg rn: srcReg imm: immediate ror: rot [
 	SUBS destReg, srcReg, #immediate ROR rot - ARM_ARM v7 DDI10406 pp. A8-418-9"
 
 	^self type: 1 op: SubOpcode set: 1 rn: srcReg rd: destReg shifterOperand: ((rot>>1) <<8 bitOr: immediate)
+]
+
+{ #category : #'TA Assembler' }
+CogARMCompiler >> templateMethod [
+	| instr theEnvironment |
+	theEnvironment := Dictionary new .
+	1. 2. 3. 4. 5. 6. 7. 8.
+	instr := #theInstruction.
+	^self spitAll: (instr inEnvironment: theEnvironment)
 ]
 
 { #category : #'ARM convenience instructions' }

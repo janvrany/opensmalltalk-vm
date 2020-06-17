@@ -940,7 +940,7 @@ CogAbstractInstruction >> getDefaultCogCodeSize [
 	 Subclasses may this default override to arrange that the code zone has about
 	 the same number of methods as the x86 back-end at a similar point in execution."
 	<inline: true>
-	^1024 * 1024
+	^1024 * 2048
 ]
 
 { #category : #accessing }
