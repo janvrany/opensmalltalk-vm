@@ -39,21 +39,6 @@ CogX64CompilerForTests class >> doubleWordRegistersWithNamesDo: aBinaryBlock [
 ]
 
 { #category : #'test support' }
-CogX64CompilerForTests class >> fp64RegistersWithAccessorsDo: aTrinaryBlock [
-	self fp64registers withIndexDo:
-		[:reg :i|
-		aTrinaryBlock
-			value: reg
-			value: (#(xmm0low xmm1low xmm2low xmm3low xmm4low xmm5low xmm6low xmm7low) at: i)
-			value: (#(xmm0low: xmm1low: xmm2low: xmm3low: xmm4low: xmm5low: xmm6low: xmm7low:) at: i)]
-]
-
-{ #category : #'test support' }
-CogX64CompilerForTests class >> fp64registers [
-	^{ DPFPReg0. DPFPReg1. DPFPReg2. DPFPReg3. DPFPReg4. DPFPReg5. DPFPReg6. DPFPReg7 } "a.k.a. (-9 to: -16 by: -1)"
-]
-
-{ #category : #'test support' }
 CogX64CompilerForTests class >> registers [
 	^(0 to: 15) "a.k.a. { RAX. RCX. RDX. RBX. RSP. RBP. RSI. RDI. R8. R9. R10. R11. R12. R13. R14. R15 }"
 ]

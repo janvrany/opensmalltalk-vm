@@ -38,13 +38,6 @@ VMClass class >> basicRemoveSelector: aSelector [
 		[:oldMethod| self touch. oldMethod]
 ]
 
-{ #category : #translation }
-VMClass class >> cogMethodClass: options [
-	^(options at: #NewspeakVM ifAbsent: [false])
-		ifTrue: [NewspeakCogMethod]
-		ifFalse: [CogMethod]
-]
-
 { #category : #'accessing class hierarchy' }
 VMClass class >> cogitClass [
 	"Answer the cogitClass in effect.  Ensure that StackInterpreter has a nil cogitClass."
@@ -100,20 +93,6 @@ VMClass class >> declareCVarsIn: aCCodeGenerator [
 
 { #category : #translation }
 VMClass class >> declareInterpreterVersionIn: aCCodeGenerator defaultName: defaultName [
-	NewspeakVM ifTrue:
-		["Newspeak as of mid 2011 derives SystemScope systemName from the interpreterVersion
-		  (via system attribute 1004) by copying up to but not including the last space, provided the
-		  string ends with a digit.  So spaces must be eliminated from the Monitcello version string,
-		  and we can't surround it with square brackets."
-		(aCCodeGenerator shortMonticelloDescriptionForClass: self) last isDigit ifFalse:
-			[self error: 'Newspeak expects interpreterVersion ends with a digit'].
-		aCCodeGenerator
-			var: #interpreterVersion
-			declareC: 'const char *interpreterVersion = "Newspeak Virtual Machine ',
-							((aCCodeGenerator shortMonticelloDescriptionForClass: self) copyReplaceAll: ' ' with: '_'),
-							'"'.
-		^self].
-	
 	aCCodeGenerator
 		var: #interpreterVersion
 		declareC: 'const char *interpreterVersion = "Croquet Closure ', defaultName, ' VM [',
@@ -158,13 +137,7 @@ VMClass class >> initializationOptions [
 { #category : #initialization }
 VMClass class >> initialize [
 	InitializationOptions ifNil: [InitializationOptions := Dictionary new].
-	ExpensiveAsserts := false.
-	(Smalltalk classNamed: #Utilities) ifNotNil:
-		[:utilitiesClass|
-		 (utilitiesClass classPool at: #CommonRequestStrings ifAbsent: []) ifNotNil:
-			[:commonRequestStringHolder|
-			(commonRequestStringHolder contents asString includesSubstring: 'VMClass open') ifFalse:
-				[Utilities appendToCommonRequests: '-\VMMaker generateConfiguration\VMMaker generateAllConfigurationsUnderVersionControl\VMMaker generateAllSpurConfigurations\VMClass openCogMultiWindowBrowser\VMClass openObjectMemoriesInterpretersBrowser\VMClass openSpurMultiWindowBrowser\VMClass openCogSpurMultiWindowBrowser\VMClass openCogitMultiWindowBrowser' withCRs]]]
+	ExpensiveAsserts := false
 ]
 
 { #category : #initialization }
@@ -201,7 +174,6 @@ VMClass class >> initializeMiscConstants [
 	"Use ifAbsentPut: so that they will get copied back to the
 	 VMMaker's options and dead code will likely be eliminated."
 	PharoVM := InitializationOptions at: #PharoVM ifAbsentPut: [false].
-	NewspeakVM := InitializationOptions at: #NewspeakVM ifAbsentPut: [false].
 	SistaVM := InitializationOptions at: #SistaVM ifAbsentPut: [false].
 	TempVectReadBarrier := InitializationOptions at: #TempVectReadBarrier ifAbsentPut: [false].
 	LowcodeVM := InitializationOptions at: #LowcodeVM ifAbsentPut: [false].
@@ -372,113 +344,6 @@ VMClass class >> objectMemoryClass [
 { #category : #'accessing class hierarchy' }
 VMClass class >> objectRepresentationClass [
 	^self objectMemoryClass objectRepresentationClass
-]
-
-{ #category : #utilities }
-VMClass class >> openCogMultiWindowBrowser [
-	"Answer a new multi-window browser on the ObjectMemory classes, the Cog Interpreter classes, and the main JIT classes"
-	| b |
-	b := Browser open.
-	#(	ObjectMemory NewObjectMemory NewCoObjectMemory
-		InterpreterPrimitives StackInterpreter StackInterpreterPrimitives CoInterpreter CoInterpreterPrimitives CoInterpreterMT
-		Cogit SimpleStackBasedCogit StackToRegisterMappingCogit
-		VMStructType VMMaker CCodeGenerator TMethod)
-		do: [:className|
-			(Smalltalk classNamed: className) ifNotNil:
-				[:class| b selectCategoryForClass: class; selectClass: class]]
-		separatedBy:
-			[b multiWindowState addNewWindow].
-	b multiWindowState selectWindowIndex: 1
-]
-
-{ #category : #utilities }
-VMClass class >> openCogSpurMultiWindowBrowser [
-	"Answer a new multi-window browser on the ObjectMemory classes, the Cog Interpreter classes, and the main JIT classes"
-	| b |
-	b := Browser open.
-	#(	SpurMemoryManager Spur32BitMemoryManager Spur32BitCoMemoryManager
-		 Spur64BitMemoryManager Spur64BitCoMemoryManager SpurGenerationScavenger
-		InterpreterPrimitives StackInterpreter StackInterpreterPrimitives CoInterpreter CoInterpreterPrimitives CoInterpreterMT
-		Cogit SimpleStackBasedCogit StackToRegisterMappingCogit
-		CogObjectRepresentation CogObjectRepresentationForSpur
-		CogObjectRepresentationFor32BitSpur CogObjectRepresentationFor64BitSpur
-		VMStructType VMMaker CCodeGenerator TMethod)
-		do: [:className|
-			(Smalltalk classNamed: className) ifNotNil:
-				[:class| b selectCategoryForClass: class; selectClass: class]]
-		separatedBy:
-			[b multiWindowState addNewWindow].
-	b multiWindowState selectWindowIndex: 1
-]
-
-{ #category : #utilities }
-VMClass class >> openCogTestsMultiWindowBrowser [
-	"Answer a new multi-window browser on the test classes in VMMaker"
-	"self openCogTestsMultiWindowBrowser"
-	| testClasses b |
-	testClasses := (PackageInfo named: 'VMMaker') classes select: [:c| c inheritsFrom: TestCase].
-	testClasses removeAll: AbstractInstructionTests allSubclasses.
-	testClasses removeAll: (testClasses select: [:c| '*Plugin*' match: c name]).
-	b := Browser open.
-	testClasses do:
-		[:class| b selectCategoryForClass: class; selectClass: class]
-		separatedBy:
-			[b multiWindowState addNewWindow].
-	b multiWindowState selectWindowIndex: 1
-]
-
-{ #category : #utilities }
-VMClass class >> openCogitMultiWindowBrowser [
-	"Answer a new multi-window browser on the ObjectMemory classes, the Cog Interpreter classes, and the main JIT classes"
-	"self openCogitMultiWindowBrowser"
-	| b |
-	b := Browser open.
-	Cogit withAllSubclasses,
-	CogObjectRepresentation withAllSubclasses,
-	{CogMethodZone. CogRTLOpcodes },
-	(CogAbstractInstruction withAllSubclasses reject: [:c| c name endsWith: 'Tests']),
-	CogBytecodeFixup withAllSubclasses,
-	CogSimStackEntry withAllSubclasses,
-	{VMStructType. VMMaker. CCodeGenerator. TMethod}
-		do: [:class|
-			b selectCategoryForClass: class; selectClass: class]
-		separatedBy:
-			[b multiWindowState addNewWindow].
-	b multiWindowState selectWindowIndex: 1
-]
-
-{ #category : #utilities }
-VMClass class >> openObjectMemoriesInterpretersBrowser [
-	"Answer a new multi-window browser on the ObjectMemory classes and the Cog Interpreter classes"
-	| b |
-	b := Browser open.
-	#(	ObjectMemory NewObjectMemory NewCoObjectMemory
-		InterpreterPrimitives StackInterpreter StackInterpreterPrimitives
-		CoInterpreter CoInterpreterPrimitives CoInterpreterMT)
-		do: [:className|
-			(Smalltalk classNamed: className) ifNotNil:
-				[:class| b selectCategoryForClass: class; selectClass: class]]
-		separatedBy:
-			[b multiWindowState addNewWindow].
-	b multiWindowState selectWindowIndex: 1
-]
-
-{ #category : #utilities }
-VMClass class >> openSpurMultiWindowBrowser [
-	"Answer a new multi-window browser on the Spur classes, the Cog StackInterpreter classes, and the support classes"
-	| b |
-	b := Browser open.
-	#(	SpurMemoryManager Spur32BitMemoryManager Spur64BitMemoryManager
-		SpurGenerationScavenger SpurSegmentManager
-		Spur32BitMMLESimulator SpurGenerationScavengerSimulator
-		InterpreterPrimitives StackInterpreter StackInterpreterPrimitives
-		VMStructType VMMaker CCodeGenerator TMethod)
-		do: [:className|
-			(Smalltalk classNamed: className) ifNotNil:
-				[:class| b selectCategoryForClass: class; selectClass: class]]
-		separatedBy:
-			[b multiWindowState addNewWindow].
-	b multiWindowState selectWindowIndex: 1
 ]
 
 { #category : #translation }
@@ -1293,16 +1158,7 @@ VMClass >> strcat: aString _: bString [
 
 { #category : #'C library extensions' }
 VMClass >> stretch: s1 cat: s2 [
-	<var: 's1' type: #'char *'>
-	<var: 's2' type: #'char *'>
-	| ns |
-	<var: 'ns' type: #'char *'>
-	^self
-		cCode:
-			[ns := self malloc: (self strlen: s1) + (self strlen: s2) + 2.
-			 self strcpy: ns _: s1.
-			 self strcat: ns  _: s2]
-		inSmalltalk: [self strcat: s1  _: s2]
+	^self strcat: s1  _: s2
 ]
 
 { #category : #'C library simulation' }

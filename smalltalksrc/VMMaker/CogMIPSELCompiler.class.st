@@ -1684,15 +1684,6 @@ CogMIPSELCompiler >> genLoadCStackPointers [
 	^0
 ]
 
-{ #category : #'smalltalk calling convention' }
-CogMIPSELCompiler >> genLoadStackPointers [
-	"Switch back to the Smalltalk stack. Assign SPReg first
-	 because typically it is used immediately afterwards."
-	cogit MoveAw: cogit stackPointerAddress R: SPReg.
-	cogit MoveAw: cogit framePointerAddress R: FPReg.
-	^0
-]
-
 { #category : #abi }
 CogMIPSELCompiler >> genMarshallNArgs: numArgs arg: regOrConst0 arg: regOrConst1 arg: regOrConst2 arg: regOrConst3 [
 	"Generate the code to pass up to four arguments in a C run-time call.  Hack: each argument is
@@ -2452,15 +2443,6 @@ CogMIPSELCompiler >> oriR: destReg R: srcReg C: imm [
 ]
 
 { #category : #'generate machine code' }
-CogMIPSELCompiler >> outputMachineCodeAt: targetAddress [
-	"Override to move machine code a word at a time."
-	<inline: true>
-	0 to: machineCodeSize - 1 by: 4 do:
-		[:j|
-		objectMemory longAt: targetAddress + j put: (machineCode at: j // 4)]
-]
-
-{ #category : #'generate machine code' }
 CogMIPSELCompiler >> padIfPossibleWithStopsFrom: startAddr to: endAddr [
 	startAddr to: endAddr - 1 by: 4 do: 
 		[:addr | objectMemory longAt: addr put: self stop].
@@ -2994,7 +2976,7 @@ CogMIPSELCompiler >> targetFromITypeAtAddress: mcpc [
 	<returnTypeC: #usqInt>
 	| offset |
 	offset := (objectMemory longAt: mcpc) bitAnd: 16rFFFF.
-	self cCode: '' inSmalltalk: [offset >= 16r8000 ifTrue: [offset := offset - 16r10000]].
+	offset >= 16r8000 ifTrue: [offset := offset - 16r10000].
 	offset := offset << 2.
 	^mcpc + offset + OneInstruction. "Offset is relative to the delay slot"
 ]

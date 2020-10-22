@@ -168,8 +168,6 @@ CoInterpreterPrimitives >> picDataFor: cogMethod [
 
 { #category : #'method introspection primitives' }
 CoInterpreterPrimitives >> primitiveAllMethodsCompiledToMachineCode [
-	<export: true>
-	<option: #SistaCogit>
 	| arrayObj nEntries maxNumEntries |
 	argumentCount ~= 0 ifTrue:
 		[^self primitiveFailFor: PrimErrBadNumArgs].
@@ -542,8 +540,6 @@ CoInterpreterPrimitives >> primitiveProfileSemaphore [
 
 { #category : #'method introspection primitives' }
 CoInterpreterPrimitives >> primitiveResetCountersInMethod [
-	<export: true>
-	<option: #SistaCogit>
 	| methodReceiver |
 	argumentCount ~= 0 ifTrue:
 		[^self primitiveFailFor: PrimErrBadNumArgs].
@@ -609,8 +605,6 @@ CoInterpreterPrimitives >> primitiveSignal [
 
 { #category : #'method introspection primitives' }
 CoInterpreterPrimitives >> primitiveSistaMethodPICAndCounterData [
-	<export: true>
-	<option: #SistaCogit>
 	| methodReceiver data |
 	argumentCount ~= 0 ifTrue:
 		[^self primitiveFailFor: PrimErrBadNumArgs].

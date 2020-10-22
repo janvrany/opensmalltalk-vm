@@ -39,8 +39,3 @@ UndefinedObject >> menuPrompt [
 UndefinedObject >> shouldStopIfAtPC: address [
 	^true
 ]
-
-{ #category : #'*VMMaker-interpreter simulator' }
-UndefinedObject >> singleStepRequiredToTriggerIn: aCogit [
-	^false
-]

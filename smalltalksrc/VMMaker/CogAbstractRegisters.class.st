@@ -9,22 +9,6 @@ Class {
 		'Arg1Reg',
 		'CallerSavedRegisterMask',
 		'ClassReg',
-		'DPFPReg0',
-		'DPFPReg1',
-		'DPFPReg10',
-		'DPFPReg11',
-		'DPFPReg12',
-		'DPFPReg13',
-		'DPFPReg14',
-		'DPFPReg15',
-		'DPFPReg2',
-		'DPFPReg3',
-		'DPFPReg4',
-		'DPFPReg5',
-		'DPFPReg6',
-		'DPFPReg7',
-		'DPFPReg8',
-		'DPFPReg9',
 		'Extra0Reg',
 		'Extra1Reg',
 		'Extra2Reg',
@@ -36,7 +20,6 @@ Class {
 		'FPReg',
 		'LinkReg',
 		'NoReg',
-		'NumFloatRegisters',
 		'NumRegisters',
 		'PCReg',
 		'RISCTempReg',
@@ -95,34 +78,6 @@ CogAbstractRegisters class >> initialize [
 	VarBaseReg	:= #undefined.		"If useful, points to base of interpreter variables."
 
 	NumRegisters	:= #undefined.	"Number of basic/integer regsiters (we don't do M68k ;-) )"
-
-	"Up to 16 floating-point registers. e.g. IA32+SSE2 can use 8, x64 can use 16."
-	DPFPReg0	:= #undefined.
-	DPFPReg1	:= #undefined.
-	DPFPReg2	:= #undefined.
-	DPFPReg3	:= #undefined.
-	DPFPReg4	:= #undefined.
-	DPFPReg5	:= #undefined.
-	DPFPReg6	:= #undefined.
-	DPFPReg7	:= #undefined.
-	DPFPReg8	:= #undefined.
-	DPFPReg9	:= #undefined.
-	DPFPReg10	:= #undefined.
-	DPFPReg11	:= #undefined.
-	DPFPReg12	:= #undefined.
-	DPFPReg13	:= #undefined.
-	DPFPReg14	:= #undefined.
-	DPFPReg15	:= #undefined.
-
-	NumFloatRegisters	:= #undefined.	"Number of floating-point registers (we don;t do single-precision; we don't do xmm high (yet)."
-]
-
-{ #category : #'debug printing' }
-CogAbstractRegisters class >> nameForFPRegister: reg [ "<Integer>"
-	^#(DPFPReg0 DPFPReg1 DPFPReg2 DPFPReg3 DPFPReg4 DPFPReg5 DPFPReg6 DPFPReg7
-		DPFPReg8 DPFPReg9 DPFPReg10 DPFPReg11 DPFPReg12 DPFPReg13 DPFPReg14 DPFPReg15)
-		detect: [:sym| (classPool at: sym) = reg]
-		ifNone: ['REG', reg printString, '?']
 ]
 
 { #category : #'debug printing' }

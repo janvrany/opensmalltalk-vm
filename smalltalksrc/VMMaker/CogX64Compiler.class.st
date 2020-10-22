@@ -195,25 +195,6 @@ CogX64Compiler class >> initializeAbstractRegisters [
 		ifFalse: [self initializeAbstractRegistersWin64].
 
 	NumRegisters := 16.
-
-	DPFPReg0				:= XMM0L.
-	DPFPReg1				:= XMM1L.
-	DPFPReg2				:= XMM2L.
-	DPFPReg3				:= XMM3L.
-	DPFPReg4				:= XMM4L.
-	DPFPReg5				:= XMM5L.
-	DPFPReg6				:= XMM6L.
-	DPFPReg7				:= XMM7L.
-	DPFPReg8				:= XMM8L.
-	DPFPReg9				:= XMM9L.
-	DPFPReg10				:= XMM10L.
-	DPFPReg11				:= XMM11L.
-	DPFPReg12				:= XMM12L.
-	DPFPReg13				:= XMM13L.
-	DPFPReg14				:= XMM14L.
-	DPFPReg15				:= XMM15L.
-
-	NumFloatRegisters := 16
 ]
 
 { #category : #'class initialization' }
@@ -3369,15 +3350,6 @@ CogX64Compiler >> genLoadCStackPointers [
 	^0
 ]
 
-{ #category : #'smalltalk calling convention' }
-CogX64Compiler >> genLoadStackPointers [
-	"Switch back to the Smalltalk stack. Assign SPReg first
-	 because typically it is used immediately afterwards."
-	cogit MoveAw: cogit stackPointerAddress R: SPReg.
-	cogit MoveAw: cogit framePointerAddress R: FPReg.
-	^0
-]
-
 { #category : #abi }
 CogX64Compiler >> genMarshallNArgs: numArgs arg: regOrConst0 arg: regOrConst1 arg: regOrConst2 arg: regOrConst3 [
 	"Generate the code to pass up to four arguments in a C run-time call.  Hack: each argument is
@@ -4113,14 +4085,6 @@ CogX64Compiler >> mod: mod RM: regMode RO: regOpcode [
 CogX64Compiler >> moveCwRByteSize [
 	<inline: true>
 	self subclassResponsibility
-]
-
-{ #category : #printing }
-CogX64Compiler >> nameForFPRegister: reg [ "<Integer>"
-	<doNotGenerate>
-	(reg between: 0 and: 15) ifTrue:
-		[^#(XMM0L XMM1L XMM2L XMM3L XMM4L XMM5L XMM6L XMM7L XMM8L XMM9L XMM10L XMM11L XMM12L XMM13L XMM14L XMM15L) at: reg + 1].
-	^super nameForFPRegister: reg
 ]
 
 { #category : #printing }

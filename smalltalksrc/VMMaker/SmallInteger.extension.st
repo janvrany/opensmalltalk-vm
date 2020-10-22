@@ -1,5 +1,24 @@
 Extension { #name : #SmallInteger }
 
+{ #category : #'*VMMaker' }
+SmallInteger >> bogusComputeHi [
+	^(self bitAnd: 16rFFFF0000) >> 16
+]
+
+{ #category : #'*VMMaker' }
+SmallInteger >> bogusComputeHiCarry [
+	| hiBits carryBit |
+	carryBit := self bitAnd: 16r00008000.
+	hiBits := ((self bitAnd: 16rFFFF0000) >> 16) toBitVector: 16.
+	carryBit isZero ifFalse: [ hiBits := (hiBits + 1) simplify ].
+	^hiBits signedValue 
+]
+
+{ #category : #'*VMMaker' }
+SmallInteger >> bogusComputeLo [
+	^self bitAnd: 16r0000FFFF
+]
+
 { #category : #'*VMMaker-plugin generation' }
 SmallInteger class >> ccg: cg generateCoerceToOopFrom: aNode on: aStream [
 	"N.B.  The is used both for generation and simulation so answer the result (for interpretation)"

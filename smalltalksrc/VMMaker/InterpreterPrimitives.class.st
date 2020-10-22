@@ -732,11 +732,6 @@ InterpreterPrimitives >> primitiveAllInstances [
 
 	<export: true>
 	| result |
-	NewspeakVM ifTrue: "For the mirror prims check that the class obj is actually a valid class."
-		[(argumentCount < 1
-		  or: [(objectMemory isNonImmediate: self stackTop)
-			  and: [self objCouldBeClassObj: self stackTop]]) ifFalse:
-			[^self primitiveFailFor: PrimErrBadArgument]].
 	result := objectMemory allInstancesOf: self stackTop.
 	(objectMemory isIntegerObject: result) ifTrue:
 		[objectMemory growToAccomodateContainerWithNumSlots: (objectMemory integerValueOf: result).
@@ -3842,10 +3837,6 @@ InterpreterPrimitives >> primitiveMultiplyLargeIntegers [
 
 { #category : #'object access primitives' }
 InterpreterPrimitives >> primitiveNew [
-	NewspeakVM ifTrue: "For the mirror prims check that the class obj is actually a valid class."
-		[(argumentCount < 1
-		  or: [self objCouldBeClassObj: self stackTop]) ifFalse:
-			[^self primitiveFailFor: PrimErrBadArgument]].
 	objectMemory hasSpurMemoryManagerAPI
 		ifTrue:
 			["Allocate a new fixed-size instance.  Fail if the allocation would leave
@@ -3906,10 +3897,6 @@ InterpreterPrimitives >> primitiveNewMethod [
 InterpreterPrimitives >> primitiveNewWithArg [
 	"Allocate a new indexable instance. Fail if the allocation would leave less than lowSpaceThreshold bytes free. May cause a GC."
 	| size spaceOkay instSpec |
-	NewspeakVM ifTrue: "For the mirror prims check that the class obj is actually a valid class."
-		[(argumentCount < 2
-		  or: [self addressCouldBeClassObj: (self stackValue: 1)]) ifFalse:
-			[^self primitiveFailFor: PrimErrBadArgument]].
 	size := self positiveMachineIntegerValueOf: self stackTop.
 	self successful ifFalse:"positiveMachineIntegerValueOf: succeeds only for non-negative integers."
 		[^self primitiveFailFor: PrimErrBadArgument].

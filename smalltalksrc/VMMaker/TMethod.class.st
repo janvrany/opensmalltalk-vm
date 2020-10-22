@@ -847,12 +847,16 @@ TMethod >> extractDirective: theSelector valueBlock: aBlock default: defaultResu
 	 to the pragma node, or defaultResult if there is no matching pragma."
 
 	| result found newStatements |
-	(properties at: theSelector ifAbsent: []) ifNotNil:
-		[:pragma|
-		^aBlock value: (TSendNode new
-							setSelector: pragma keyword
-							receiver: (TVariableNode new setName: 'self')
-							arguments: (pragma arguments collect: [:const| TConstantNode new setValue: const]))].
+	(properties at: theSelector ifAbsent: [  ])
+		ifNotNil: [ :pragma | 
+			^ aBlock
+				value:
+					(TSendNode new
+						setSelector: pragma selector
+						receiver: (TVariableNode new setName: 'self')
+						arguments:
+							(pragma arguments
+								collect: [ :const | TConstantNode new setValue: const ])) ].
 	"Pre-pragma backward compatibility:
 	 Scan the top-level statements for a labelling directive of the form:
 
@@ -860,23 +864,20 @@ TMethod >> extractDirective: theSelector valueBlock: aBlock default: defaultResu
 
 	 and remove the directive from the method body if found.
 	 Answer the result of evaluating aBock with the send node,
-	  or defaultResult if there is no labelling directive."	result := defaultResult.
+	  or defaultResult if there is no labelling directive."
+	result := defaultResult.
 	found := false.
 	newStatements := OrderedCollection new: parseTree statements size.
-	parseTree statements do:
-		[ :stmt |
-		(stmt isSend
-		 and: [stmt selector = theSelector])
-			ifTrue:
-				[found := true.
-				 result := aBlock value: stmt]
-			ifFalse:
-				[newStatements add: stmt]].
-	^found
-		ifTrue:
-			[parseTree setStatements: newStatements asArray.
-			 result]
-		ifFalse: [defaultResult]
+	parseTree statements
+		do: [ :stmt | 
+			(stmt isSend and: [ stmt selector = theSelector ])
+				ifTrue: [ found := true.
+					result := aBlock value: stmt ]
+				ifFalse: [ newStatements add: stmt ] ].
+	^ found
+		ifTrue: [ parseTree setStatements: newStatements asArray.
+			result ]
+		ifFalse: [ defaultResult ]
 ]
 
 { #category : #transformations }
@@ -2516,44 +2517,54 @@ TMethod >> renameVariablesUsing: aDictionary [
 	"Rename all variables according to old->new mappings of the given dictionary."
 
 	| newDecls newProperties |
-	aDictionary isEmpty ifTrue: [^self].
+	aDictionary isEmpty
+		ifTrue: [ ^ self ].
 
 	"map args and locals"
-	args := args collect: [ :arg | aDictionary at: arg ifAbsent: [ arg ]].
-	locals := locals collect: [ :v | aDictionary at: v ifAbsent: [ v ]].
+	args := args
+		collect: [ :arg | aDictionary at: arg ifAbsent: [ arg ] ].
+	locals := locals collect: [ :v | aDictionary at: v ifAbsent: [ v ] ].
 
 	"map declarations"
 	newDecls := declarations species new.
-	declarations keysAndValuesDo:
-		[:oldName :decl|
-		(aDictionary at: oldName ifAbsent: nil)
-			ifNotNil:
-				[:newName| | index |
-				index := decl indexOfWord: oldName.
-				 newDecls
-					at: newName
-					put: (index ~= 0
-							ifTrue: [decl copyReplaceFrom: index to: index + oldName size - 1 with: newName]
-							ifFalse: [decl])]
-			ifNil: [newDecls at: oldName put: decl]].
+	declarations
+		keysAndValuesDo: [ :oldName :decl | 
+			(aDictionary at: oldName ifAbsent: nil)
+				ifNotNil: [ :newName | 
+					| index |
+					index := decl indexOfWord: oldName.
+					newDecls
+						at: newName
+						put:
+							(index ~= 0
+								ifTrue: [ decl
+										copyReplaceFrom: index
+										to: index + oldName size - 1
+										with: newName ]
+								ifFalse: [ decl ]) ]
+				ifNil: [ newDecls at: oldName put: decl ] ].
 	self newDeclarations: newDecls.
-
 	newProperties := properties copy.
-	newProperties pragmas do:
-		[:pragma| | mappedArgs |
-		mappedArgs := pragma arguments collect: [:arg| arg isString ifTrue: [aDictionary at: arg ifAbsent: arg] ifFalse: [arg]].
-		mappedArgs ~= pragma arguments ifTrue:
-			[pragma setArguments: mappedArgs]].
+	newProperties pragmas
+		do: [ :pragma | 
+			| mappedArgs |
+			mappedArgs := pragma arguments
+				collect: [ :arg | 
+					arg isString
+						ifTrue: [ aDictionary at: arg ifAbsent: arg ]
+						ifFalse: [ arg ] ].
+			mappedArgs ~= pragma arguments
+				ifTrue: [ pragma arguments: mappedArgs ] ].
 	self properties: newProperties.
 
 	"map variable names in parse tree"
-	parseTree nodesDo:
-		[ :node |
-		(node isVariable
-		and: [aDictionary includesKey: node name]) ifTrue:
-			[node setName: (aDictionary at: node name)].
-		(node isStmtList and: [node args size > 0]) ifTrue:
-			[node setArguments: (node args collect: [ :arg | aDictionary at: arg ifAbsent: [ arg ]])]]
+	parseTree
+		nodesDo: [ :node | 
+			(node isVariable and: [ aDictionary includesKey: node name ])
+				ifTrue: [ node setName: (aDictionary at: node name) ].
+			(node isStmtList and: [ node args size > 0 ])
+				ifTrue: [ node
+						setArguments: (node args collect: [ :arg | aDictionary at: arg ifAbsent: [ arg ] ]) ] ]
 ]
 
 { #category : #'inlining support' }
@@ -2672,15 +2683,15 @@ TMethod >> sharedLabel [
 
 { #category : #inlining }
 TMethod >> shouldIncorporatePragmaFromSuperMethod: aPragma [
-	(properties includesKey: aPragma keyword) ifFalse:
-		[^true].
-	((aPragma keyword beginsWith: #var:)
-	  and: [properties pragmas noneSatisfy:
-			[:p|
-			(p keyword beginsWith: #var:)
-			and: [(p argumentAt: 1) = (aPragma argumentAt: 1)]]]) ifTrue:
-		[^true].
-	^false
+	(properties includesKey: aPragma selector)
+		ifFalse: [ ^ true ].
+	((aPragma selector beginsWith: #var:)
+		and: [ properties pragmas
+				noneSatisfy: [ :p | 
+					(p selector beginsWith: #var:)
+						and: [ (p argumentAt: 1) = (aPragma argumentAt: 1) ] ] ])
+		ifTrue: [ ^ true ].
+	^ false
 ]
 
 { #category : #accessing }

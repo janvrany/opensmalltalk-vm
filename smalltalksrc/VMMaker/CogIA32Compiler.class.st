@@ -141,17 +141,6 @@ CogIA32Compiler class >> initializeAbstractRegisters [
 	Arg1Reg				:= EDI.
 
 	NumRegisters := 8.
-
-	DPFPReg0				:= XMM0L.
-	DPFPReg1				:= XMM1L.
-	DPFPReg2				:= XMM2L.
-	DPFPReg3				:= XMM3L.
-	DPFPReg4				:= XMM4L.
-	DPFPReg5				:= XMM5L.
-	DPFPReg6				:= XMM6L.
-	DPFPReg7				:= XMM7L.
-
-	NumFloatRegisters := 8
 ]
 
 { #category : #testing }
@@ -3126,15 +3115,6 @@ CogIA32Compiler >> genLoadCStackPointers [
 	 the CoInterpreter run-time (e.g. to invoke interpreter primitives)."
 	cogit MoveAw: cogit cStackPointerAddress R: SPReg.
 	cogit MoveAw: cogit cFramePointerAddress R: FPReg.
-	^0
-]
-
-{ #category : #'smalltalk calling convention' }
-CogIA32Compiler >> genLoadStackPointers [
-	"Switch back to the Smalltalk stack. Assign SPReg first
-	 because typically it is used immediately afterwards."
-	cogit MoveAw: cogit stackPointerAddress R: SPReg.
-	cogit MoveAw: cogit framePointerAddress R: FPReg.
 	^0
 ]
 

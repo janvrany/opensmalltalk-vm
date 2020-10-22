@@ -20,5 +20,5 @@ Booo class >> primitiveDisassembleAt: address inMemory: memoryArray [ "<Bitmap|B
 	pdl := AcProcessorDescriptions armv5.
 	^Array
 		with: 4
-		with: (pdl disassemble: instrBytes) disassemble
+		with: (pdl disassemble: instrBytes)
 ]

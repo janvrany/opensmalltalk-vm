@@ -557,16 +557,10 @@ StackInterpreter class >> declareCVarsIn: aCCodeGenerator [
 	aCCodeGenerator
 		var: #methodCache
 		declareC: 'sqIntptr_t methodCache[MethodCacheSize + 1 /* ', (MethodCacheSize + 1) printString, ' */]'.
-	NewspeakVM
-		ifTrue:
-			[aCCodeGenerator
-				var: #nsMethodCache
-				declareC: 'sqIntptr_t nsMethodCache[NSMethodCacheSize + 1 /* ', (NSMethodCacheSize + 1) printString, ' */]']
-		ifFalse:
-			[aCCodeGenerator
+	aCCodeGenerator
 				removeVariable: #nsMethodCache;
 				removeVariable: 'localAbsentReceiver';
-				removeVariable: 'localAbsentReceiverOrZero'].
+				removeVariable: 'localAbsentReceiverOrZero'.
 	AtCacheTotalSize isInteger ifTrue:
 		[aCCodeGenerator
 			var: #atCache
@@ -657,11 +651,6 @@ StackInterpreter class >> initializeBytecodeTable [
 
 	(InitializationOptions at: #bytecodeTableInitializer ifAbsent: nil) ifNotNil:
 		[:initalizer| ^self perform: initalizer].
-
-	NewspeakVM ifTrue:
-		[^MULTIPLEBYTECODESETS
-			ifTrue: [self initializeBytecodeTableForSqueakV3PlusClosuresNewspeakV4Hybrid]
-			ifFalse: [self initializeBytecodeTableForNewspeakV4]].
 
 	^MULTIPLEBYTECODESETS
 		ifTrue: [self initializeBytecodeTableForSqueakV3PlusClosuresSistaV1Hybrid]
@@ -1060,9 +1049,7 @@ StackInterpreter class >> initializeBytecodeTableForSqueakV3PlusClosuresSistaV1H
 StackInterpreter class >> initializeCaches [
 
 	| atCacheEntries atCacheEntrySize |
-	NewspeakVM
-		ifTrue: [MethodCacheEntries := 512]
-		ifFalse: [MethodCacheEntries := 1024].
+	MethodCacheEntries := 1024.
 	MethodCacheSelector := 1.
 	MethodCacheClass := 2.
 	MethodCacheMethod := 3.
@@ -1128,15 +1115,6 @@ StackInterpreter class >> initializeClassIndices [
 	"Fields of a message dictionary"
 	MethodArrayIndex := 1. 
 	SelectorStart := 2.
-
-	"Newspeak extensions"
-	"Fields of a Mixin (also defined by Behavior)"
-	EnclosingMixinIndex := NewspeakVM ifTrue: [3].  "(Class instVarIndexFor: 'mixinSlot') - 1"
-	"Fields of a MixinApplication (also defined by Behavior)"
-	MixinIndex := NewspeakVM ifTrue: [3]. "(Class instVarIndexFor: 'mixinSlot') - 1"
-	EnclosingObjectIndex := NewspeakVM ifTrue: [4]. "(Class instVarIndexFor: 'enclosingObjectSlot') - 1"
-
-
 ]
 
 { #category : #initialization }
@@ -7120,9 +7098,7 @@ StackInterpreter >> findNewMethodInClassTag: classTagArg [
 			ok ifTrue:
 				[^nil]].
  		 lkupClass := objectMemory classForClassTag: classTag.
-		 NewspeakVM
-				ifTrue: [self lookupOrdinarySend]
-				ifFalse: [self lookupMethodInClass: lkupClass].
+		 self lookupMethodInClass: lkupClass.
 		 self addNewMethodToCache: lkupClass]
 ]
 
@@ -7377,8 +7353,6 @@ StackInterpreter >> flushMethodCache [
 	"Flush the method cache. The method cache is flushed on every programming change and garbage collect."
 
 	1 to: MethodCacheSize do: [ :i | methodCache at: i put: 0 ].
-	NewspeakVM ifTrue:
-		[1 to: NSMethodCacheSize do: [ :i | nsMethodCache at: i put: 0 ]].
 	lastMethodCacheProbeWrite := 0. "this for primitiveExternalMethod"
 	self flushAtCache
 ]
@@ -7415,8 +7389,6 @@ StackInterpreter >> flushMethodCacheFrom: memStart to: memEnd [
 				 and: [self oop: (methodCache at: probe + MethodCacheMethod) isLessThan: memEnd]]) ifTrue:
 				[methodCache at: probe + MethodCacheSelector put: 0]].
 			probe := probe + MethodCacheEntrySize].
-	NewspeakVM ifTrue:
-		[1 to: NSMethodCacheSize do: [ :i | nsMethodCache at: i put: 0]].
 	self flushAtCache
 ]
 

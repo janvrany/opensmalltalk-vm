@@ -37,7 +37,6 @@ Class {
 		'IMMUTABILITY',
 		'LowcodeVM',
 		'MULTIPLEBYTECODESETS',
-		'NewspeakVM',
 		'PharoVM',
 		'PrimErrBadArgument',
 		'PrimErrBadIndex',

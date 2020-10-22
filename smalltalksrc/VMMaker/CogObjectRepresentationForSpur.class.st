@@ -287,9 +287,6 @@ CogObjectRepresentationForSpur >> ensureNoForwardedLiteralsIn: aMethodObj [
 
 { #category : #'sista support' }
 CogObjectRepresentationForSpur >> freeCounters: theCounters [
-	<var: #theCounters type: #usqInt>
-	<inline: true>
-	<option: #SistaCogit>
 	theCounters ~= 0 ifTrue:
 		[objectMemory freeObject: theCounters - objectMemory baseHeaderSize]
 ]
@@ -635,14 +632,9 @@ CogObjectRepresentationForSpur >> genGetActiveContextLarge: isLarge inBlock: isI
 	 answer it if a frame is already married, and create it otherwise.
 	 Assume numArgs is in SendNumArgsReg and ClassReg is free."
 	| header slotSize jumpSingle loopHead jumpNeedScavenge continuation exit |
-	<var: #jumpNeedScavenge type: #'AbstractInstruction *'>
-	<var: #continuation type: #'AbstractInstruction *'>
-	<var: #jumpSingle type: #'AbstractInstruction *'>
-	<var: #loopHead type: #'AbstractInstruction *'>
-	<var: #exit type: #'AbstractInstruction *'>
-	cogit "load the flag; stash it in both TempReg & ClassReg; do the compare (a prime candidated for use of AndCq:R:R:)"
-		MoveMw: FoxMethod r: FPReg R: ClassReg;
-		AndCq: MFMethodFlagHasContextFlag R: ClassReg R: TempReg.
+	"load the flag; stash it in both TempReg & ClassReg; do the compare (a prime candidated for use of AndCq:R:R:)"
+	cogit MoveMw: FoxMethod r: FPReg R: ClassReg.
+	cogit AndCq: MFMethodFlagHasContextFlag R: ClassReg R: TempReg.
 	jumpSingle := cogit JumpZero: 0. "jump if flag bit not set"
 	cogit "since the flag bit was set, get the context in the receiver reg and return"
 		MoveMw: FoxThisContext r: FPReg R: ReceiverResultReg;
@@ -675,8 +667,8 @@ CogObjectRepresentationForSpur >> genGetActiveContextLarge: isLarge inBlock: isI
 	cogit
 		MoveR: ReceiverResultReg R: TempReg;
 		AddCq: (objectMemory smallObjectBytesForSlots: slotSize) R: TempReg;
-		MoveR: TempReg Aw: objectMemory freeStartAddress;
-		CmpCq: objectMemory getScavengeThreshold R: TempReg.
+		MoveR: TempReg Aw: objectMemory freeStartAddress.
+		cogit CmpCq: objectMemory getScavengeThreshold R: TempReg.
 	jumpNeedScavenge := cogit JumpAboveOrEqual: 0.
 
 	"Now initialize the fields of the context.  See CoInterpreter>>marryFrame:SP:copyTemps:"
@@ -1720,78 +1712,6 @@ CogObjectRepresentationForSpur >> genPrimitiveLoadChar8FromExternalAddress [
 ]
 
 { #category : #'primitive generators' }
-CogObjectRepresentationForSpur >> genPrimitiveLoadFloat32FromBytes [
-	^ self genPrimitiveLoad: 4 fromBytesWith: [ :sourcePointer |
-		| jumpFailAlloc |
-		cogit MoveM32: 0 r: sourcePointer Rs: DPFPReg0.
-		cogit ConvertRs: DPFPReg0 Rd: DPFPReg0.
-
-		jumpFailAlloc := self
-						genAllocFloatValue: DPFPReg0
-						into: SendNumArgsReg
-						scratchReg: ClassReg
-						scratchReg: TempReg.
-		cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-		cogit genPrimReturn.
-		
-		jumpFailAlloc jmpTarget: cogit Label
-	] needsToTrap: true.
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationForSpur >> genPrimitiveLoadFloat32FromExternalAddress [
-	^ self genPrimitiveLoadFromExternalAddressWith: [ :sourcePointer |
-		| jumpFailAlloc |
-		cogit MoveM32: 0 r: sourcePointer Rs: DPFPReg0.
-		cogit ConvertRs: DPFPReg0 Rd: DPFPReg0.
-
-		jumpFailAlloc := self
-						genAllocFloatValue: DPFPReg0
-						into: SendNumArgsReg
-						scratchReg: ClassReg
-						scratchReg: TempReg.
-		cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-		cogit genPrimReturn.
-		
-		jumpFailAlloc jmpTarget: cogit Label
-	] needsToTrap: true.
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationForSpur >> genPrimitiveLoadFloat64FromBytes [
-	^ self genPrimitiveLoad: 8 fromBytesWith: [ :sourcePointer |
-		| jumpFailAlloc |
-		cogit MoveM64: 0 r: sourcePointer Rd: DPFPReg0.
-		jumpFailAlloc := self
-						genAllocFloatValue: DPFPReg0
-						into: SendNumArgsReg
-						scratchReg: ClassReg
-						scratchReg: TempReg.
-		cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-		cogit genPrimReturn.
-		
-		jumpFailAlloc jmpTarget: cogit Label
-	] needsToTrap: true.
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationForSpur >> genPrimitiveLoadFloat64FromExternalAddress [
-	^ self genPrimitiveLoadFromExternalAddressWith: [ :sourcePointer |
-		| jumpFailAlloc |
-		cogit MoveM64: 0 r: sourcePointer Rd: DPFPReg0.
-		jumpFailAlloc := self
-						genAllocFloatValue: DPFPReg0
-						into: SendNumArgsReg
-						scratchReg: ClassReg
-						scratchReg: TempReg.
-		cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-		cogit genPrimReturn.
-		
-		jumpFailAlloc jmpTarget: cogit Label
-	] needsToTrap: true.
-]
-
-{ #category : #'primitive generators' }
 CogObjectRepresentationForSpur >> genPrimitiveLoadFromExternalAddressWith: aBlock [
 	<inline: true>
 	^ self genPrimitiveLoadFromExternalAddressWith: aBlock needsToTrap: false
@@ -2205,64 +2125,6 @@ CogObjectRepresentationForSpur >> genPrimitiveStoreChar8IntoExternalAddress [
 		cogit genPrimReturn.
 		
 		jumpNonCharacter jmpTarget: cogit Label
-	].
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationForSpur >> genPrimitiveStoreFloat32IntoBytes [
-	^ self genPrimitiveStore: 4 intoBytesWith: [ :destPointer :valueOop |
-		| jumpNonFloat |
-		jumpNonFloat := self genBoxedOrSmallFloat: valueOop scratchReg: TempReg into: DPFPReg0.
-		cogit ConvertRd: DPFPReg0 Rs: DPFPReg0.
-		cogit MoveRs: DPFPReg0 M32: 0 r: destPointer.
-
-		cogit MoveR: valueOop R: ReceiverResultReg.
-		cogit genPrimReturn.
-		
-		jumpNonFloat jmpTarget: cogit Label
-	].
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationForSpur >> genPrimitiveStoreFloat32IntoExternalAddress [
-	^ self genPrimitiveStoreIntoExternalAddressWith: [ :destPointer :valueOop |
-		| jumpNonFloat |
-		jumpNonFloat := self genBoxedOrSmallFloat: valueOop scratchReg: TempReg into: DPFPReg0.
-		cogit ConvertRd: DPFPReg0 Rs: DPFPReg0.
-		cogit MoveRs: DPFPReg0 M32: 0 r: destPointer.
-
-		cogit MoveR: valueOop R: ReceiverResultReg.
-		cogit genPrimReturn.
-		
-		jumpNonFloat jmpTarget: cogit Label
-	].
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationForSpur >> genPrimitiveStoreFloat64IntoBytes [
-	^ self genPrimitiveStore: 8 intoBytesWith: [ :destPointer :valueOop |
-		| jumpNonFloat |
-		jumpNonFloat := self genBoxedOrSmallFloat: valueOop scratchReg: TempReg into: DPFPReg0.
-		cogit MoveRd: DPFPReg0 M64: 0 r: destPointer.
-
-		cogit MoveR: valueOop R: ReceiverResultReg.
-		cogit genPrimReturn.
-		
-		jumpNonFloat jmpTarget: cogit Label
-	].
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationForSpur >> genPrimitiveStoreFloat64IntoExternalAddress [
-	^ self genPrimitiveStoreIntoExternalAddressWith: [ :destPointer :valueOop |
-		| jumpNonFloat |
-		jumpNonFloat := self genBoxedOrSmallFloat: valueOop scratchReg: TempReg into: DPFPReg0.
-		cogit MoveRd: DPFPReg0 M64: 0 r: destPointer.
-
-		cogit MoveR: valueOop R: ReceiverResultReg.
-		cogit genPrimReturn.
-		
-		jumpNonFloat jmpTarget: cogit Label
 	].
 ]
 
@@ -3380,9 +3242,6 @@ CogObjectRepresentationForSpur >> maybeCompileRetryOnPrimitiveFail: primIndex [
 CogObjectRepresentationForSpur >> maybeMarkCounters: theCounters [
 	"In SIsta Spur counters are held on the heap in pinned objects which must be marked
 	 to avoid them being garbage collected.  This is the hook through which that happens."
-	<var: #theCounters type: #usqInt>
-	<option: #SistaCogit>
-	<inline: true>
 	theCounters ~= 0 ifTrue:
 		[objectMemory markAndTrace: theCounters - objectMemory baseHeaderSize]
 ]
@@ -3569,9 +3428,6 @@ CogObjectRepresentationForSpur >> remapOop: objOop [
 
 { #category : #'sista support' }
 CogObjectRepresentationForSpur >> resetCountersIn: cogMethod [
-	<var: #cogMethod type: #'CogMethod *'>
-	<api>
-	<option: #SistaCogit>
 	cogit fillInCounters: (self numCountersFor: cogMethod counters) atStartAddress: cogMethod counters
 ]
 

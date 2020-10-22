@@ -140,16 +140,14 @@ CogBytecodeFixup >> printStateOn: aStream [
 
 { #category : #simulation }
 CogBytecodeFixup >> recordBcpc: theBytecodePC [
-	<inline: true>
-	self cCode: '' inSmalltalk:
-		[(bcpc isNil or: [bcpc = theBytecodePC])
+	(bcpc isNil or: [bcpc = theBytecodePC])
 			ifTrue: [bcpc := theBytecodePC]
 			ifFalse:
 				[bcpc := bcpc isInteger
 							ifTrue: [{bcpc. theBytecodePC}]
 							ifFalse:
 								[(bcpc includes: theBytecodePC) ifTrue: [^self].
-								 bcpc, {theBytecodePC}]]]
+								 bcpc, {theBytecodePC}]]
 ]
 
 { #category : #accessing }

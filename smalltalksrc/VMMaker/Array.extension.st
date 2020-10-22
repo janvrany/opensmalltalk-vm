@@ -53,8 +53,3 @@ Array >> menuPrompt [
 Array >> removeBreakpoint: address [
 	^(self copyWithout: address) ifEmpty: nil
 ]
-
-{ #category : #'*VMMaker-interpreter simulator' }
-Array >> singleStepRequiredToTriggerIn: aCogit [
-	^self anySatisfy: [:address| address between: aCogit cogCodeBase and: aCogit methodZone limitZony]
-]

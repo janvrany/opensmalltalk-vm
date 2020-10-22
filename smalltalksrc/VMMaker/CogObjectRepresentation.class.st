@@ -156,93 +156,6 @@ CogObjectRepresentation >> genCreateFullClosure: compiledBlock numArgs: numArgs 
 	self subclassResponsibility
 ]
 
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genDoubleArithmetic: arithmeticOperator preOpCheck: preOpCheckOrNil [
-	<option: #DPFPReg0>
-	<var: #preOpCheckOrNil declareC: 'AbstractInstruction *(*preOpCheckOrNil)(int rcvrReg, int argReg)'>
-	| jumpFailClass jumpFailAlloc jumpFailCheck jumpImmediate jumpNonInt doOp |
-	<var: #jumpFailClass type: #'AbstractInstruction *'>
-	<var: #jumpFailAlloc type: #'AbstractInstruction *'>
-	<var: #jumpImmediate type: #'AbstractInstruction *'>
-	<var: #jumpNonInt type: #'AbstractInstruction *'>
-	<var: #jumpFailCheck type: #'AbstractInstruction *'>
-	<var: #doOp type: #'AbstractInstruction *'>
-	cogit processorHasDoublePrecisionFloatingPointSupport ifFalse:
-		[^UnimplementedPrimitive].
-	cogit genLoadArgAtDepth: 0 into: Arg0Reg.
-	self genGetDoubleValueOf: ReceiverResultReg into: DPFPReg0.
-	cogit MoveR: Arg0Reg R: ClassReg.
-	jumpImmediate := self genJumpImmediate: Arg0Reg.
-	self genGetCompactClassIndexNonImmOf: Arg0Reg into: SendNumArgsReg.
-	self genCmpClassFloatCompactIndexR: SendNumArgsReg.
-	jumpFailClass := cogit JumpNonZero: 0.
-	self genGetDoubleValueOf: Arg0Reg into: DPFPReg1.
-	doOp := cogit Label.
-	preOpCheckOrNil ifNotNil:
-		[jumpFailCheck := cogit perform: preOpCheckOrNil with: DPFPReg0 with: DPFPReg1].
-	cogit gen: arithmeticOperator operand: DPFPReg1 operand: DPFPReg0.
-	jumpFailAlloc := self
-						genAllocFloatValue: DPFPReg0
-						into: SendNumArgsReg
-						scratchReg: ClassReg
-						scratchReg: TempReg.
-	cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-	cogit genPrimReturn.
-	jumpImmediate jmpTarget: cogit Label.
-	self maybeGenConvertIfSmallFloatIn: Arg0Reg scratchReg: TempReg into: DPFPReg1 andJumpTo: doOp.
-	self smallIntegerIsOnlyImmediateType ifFalse:
-		[jumpNonInt := self genJumpNotSmallInteger: Arg0Reg scratchReg: TempReg].
-	self genConvertSmallIntegerToIntegerInReg: ClassReg.
-	cogit ConvertR: ClassReg Rd: DPFPReg1.
-	cogit Jump: doOp.
-	jumpFailAlloc jmpTarget:  (jumpFailClass jmpTarget: cogit Label).
-	self smallIntegerIsOnlyImmediateType ifFalse:
-		[jumpNonInt jmpTarget: jumpFailClass getJmpTarget].
-	preOpCheckOrNil ifNotNil:
-		[jumpFailCheck jmpTarget: jumpFailClass getJmpTarget].
-	^0
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genDoubleComparison: jumpOpcodeGenerator invert: invertComparison [
-	<option: #DPFPReg0>
-	<var: #jumpOpcodeGenerator declareC: 'AbstractInstruction * NoDbgRegParms (*jumpOpcodeGenerator)(void *)'>
-	| jumpFail jumpImmediate jumpNonInt jumpCond compare |
-	<var: #jumpImmediate type: #'AbstractInstruction *'>
-	<var: #jumpNonInt type: #'AbstractInstruction *'>
-	<var: #jumpCond type: #'AbstractInstruction *'>
-	<var: #compare type: #'AbstractInstruction *'>
-	<var: #jumpFail type: #'AbstractInstruction *'>
-	cogit processorHasDoublePrecisionFloatingPointSupport ifFalse:
-		[^UnimplementedPrimitive].
-	cogit genLoadArgAtDepth: 0 into: Arg0Reg.
-	self genGetDoubleValueOf: ReceiverResultReg into: DPFPReg0.
-	jumpImmediate := self genJumpImmediate: Arg0Reg.
-	self genGetCompactClassIndexNonImmOf: Arg0Reg into: SendNumArgsReg.
-	self genCmpClassFloatCompactIndexR: SendNumArgsReg.
-	jumpFail := cogit JumpNonZero: 0.
-	self genGetDoubleValueOf: Arg0Reg into: DPFPReg1.
-	invertComparison "May need to invert for NaNs"
-		ifTrue: [compare := cogit CmpRd: DPFPReg0 Rd: DPFPReg1]
-		ifFalse: [compare := cogit CmpRd: DPFPReg1 Rd: DPFPReg0].
-	jumpCond := cogit perform: jumpOpcodeGenerator with: 0. "FP jumps are a little weird"
-	cogit genMoveFalseR: ReceiverResultReg.
-	cogit genPrimReturn.
-	jumpCond jmpTarget: (cogit genMoveTrueR: ReceiverResultReg).
-	cogit genPrimReturn.
-	jumpImmediate jmpTarget: cogit Label.
-	self maybeGenConvertIfSmallFloatIn: Arg0Reg scratchReg: TempReg into: DPFPReg1 andJumpTo: compare.
-	self smallIntegerIsOnlyImmediateType ifFalse:
-		[jumpNonInt := self genJumpNotSmallInteger: Arg0Reg scratchReg: TempReg].
-	self genConvertSmallIntegerToIntegerInReg: Arg0Reg.
-	cogit ConvertR: Arg0Reg Rd: DPFPReg1.
-	cogit Jump: compare.
-	jumpFail jmpTarget: cogit Label.
-	self smallIntegerIsOnlyImmediateType ifFalse:
-		[jumpNonInt jmpTarget: jumpFail getJmpTarget].
-	^CompletePrimitive
-]
-
 { #category : #'compile abstract instructions' }
 CogObjectRepresentation >> genEnsureObjInRegNotForwarded: reg scratchReg: scratch [
 	"Make sure that the object in reg is not forwarded.  By default there is
@@ -444,26 +357,6 @@ CogObjectRepresentation >> genLcByteSizeOf: oop to: resultRegister [
 ]
 
 { #category : #'inline primitive support' }
-CogObjectRepresentation >> genLcFloat32: value toOop: object [
-	<option: #LowcodeVM>
-	cogit ConvertRs: value Rd: DPFPReg0.
-	cogit CallRT: ceFloatObjectOfTrampoline.
-
-	cogit MoveR: TempReg R: object.
-	cogit ssPushRegister: object.
-]
-
-{ #category : #'inline primitive support' }
-CogObjectRepresentation >> genLcFloat64: value toOop: object [
-	<option: #LowcodeVM>
-	value ~= DPFPReg0 ifTrue: [ cogit MoveRd: value Rd: DPFPReg0].
-	cogit CallRT: ceFloatObjectOfTrampoline.
-
-	cogit MoveR: TempReg R: object.
-	cogit ssPushRegister: object.
-]
-
-{ #category : #'inline primitive support' }
 CogObjectRepresentation >> genLcInstantiateOop: classOop [
 	<option: #LowcodeVM>
 	classOop ~= ReceiverResultReg ifTrue: [cogit MoveR: classOop R: ReceiverResultReg].
@@ -542,26 +435,6 @@ CogObjectRepresentation >> genLcInt64ToOop: valueLow highPart: valueHigh [
 
 	cogit MoveR: TempReg R: ReceiverResultReg.
 	cogit ssPushRegister: ReceiverResultReg.
-]
-
-{ #category : #'inline primitive support' }
-CogObjectRepresentation >> genLcOop: object toFloat32: value [
-	<option: #LowcodeVM>
-	object ~= ReceiverResultReg ifTrue: [ cogit MoveR: object R: ReceiverResultReg].
-	cogit CallRT: ceFloatValueOfTrampoline.
-
-	cogit ConvertRd: DPFPReg0 Rs: value.
-	cogit ssPushNativeRegisterSingleFloat: value.
-]
-
-{ #category : #'inline primitive support' }
-CogObjectRepresentation >> genLcOop: object toFloat64: value [
-	<option: #LowcodeVM>
-	object ~= ReceiverResultReg ifTrue: [ cogit MoveR: object R: ReceiverResultReg].
-	cogit CallRT: ceFloatValueOfTrampoline.
-
-	DPFPReg0 ~= value ifTrue: [cogit MoveRd: DPFPReg0 Rd: value.].
-	cogit ssPushNativeRegisterDoubleFloat: value.
 ]
 
 { #category : #'inline primitive support' }
@@ -708,27 +581,6 @@ CogObjectRepresentation >> genPrimitiveAdd [
 CogObjectRepresentation >> genPrimitiveAsCharacter [
 	"subclasses override if they can"
 	^UnimplementedPrimitive
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveAsFloat [
-	<option: #DPFPReg0>
-	| jumpFailAlloc |
-	<var: #jumpFailAlloc type: #'AbstractInstruction *'>
-	cogit processorHasDoublePrecisionFloatingPointSupport ifFalse:
-		[^UnimplementedPrimitive].
-	cogit MoveR: ReceiverResultReg R: TempReg.
-	self genConvertSmallIntegerToIntegerInReg: TempReg.
-	cogit ConvertR: TempReg Rd: DPFPReg0.
-	jumpFailAlloc := self
-						genAllocFloatValue: DPFPReg0
-						into: SendNumArgsReg
-						scratchReg: ClassReg
-						scratchReg: TempReg.
-	cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-	cogit genPrimReturn.
-	jumpFailAlloc jmpTarget: cogit Label.
-	^0
 ]
 
 { #category : #'primitive generators' }
@@ -975,88 +827,6 @@ CogObjectRepresentation >> genPrimitiveEqual [
 		genSmallIntegerComparison: JumpZero
 		orDoubleComparison: #JumpFPEqual:
 		invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatAdd [
-	<option: #DPFPReg0>
-	^self genDoubleArithmetic: AddRdRd preOpCheck: nil
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatDivide [
-	<option: #DPFPReg0>
-	^self 
-		genDoubleArithmetic: DivRdRd
-		preOpCheck: #genDoubleFailIfZeroArgRcvr:arg:
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatEqual [
-	<option: #DPFPReg0>
-	^self genDoubleComparison: #JumpFPEqual: invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatGreaterOrEqual [
-	<option: #DPFPReg0>
-	^self genDoubleComparison: #JumpFPGreaterOrEqual: invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatGreaterThan [
-	<option: #DPFPReg0>
-	^self genDoubleComparison: #JumpFPGreater: invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatLessOrEqual [
-	<option: #DPFPReg0>
-	^self genDoubleComparison: #JumpFPGreaterOrEqual: invert: true
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatLessThan [
-	<option: #DPFPReg0>
-	^self genDoubleComparison: #JumpFPGreater: invert: true
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatMultiply [
-	<option: #DPFPReg0>
-	^self genDoubleArithmetic: MulRdRd preOpCheck: nil
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatNotEqual [
-	<option: #DPFPReg0>
-	^self genDoubleComparison: #JumpFPNotEqual: invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatSquareRoot [
-	<option: #DPFPReg0>
-	| jumpFailAlloc |
-	<var: #jumpFailAlloc type: #'AbstractInstruction *'>
-	cogit processorHasDoublePrecisionFloatingPointSupport ifFalse:
-		[^UnimplementedPrimitive].
-	self genGetDoubleValueOf: ReceiverResultReg into: DPFPReg0.
-	cogit SqrtRd: DPFPReg0.
-	jumpFailAlloc := self
-						genAllocFloatValue: DPFPReg0
-						into: SendNumArgsReg
-						scratchReg: ClassReg
-						scratchReg: TempReg.
-	cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-	cogit genPrimReturn.
-	jumpFailAlloc jmpTarget: cogit Label.
-	^0
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveFloatSubtract [
-	<option: #DPFPReg0>
-	^self genDoubleArithmetic: SubRdRd preOpCheck: nil
 ]
 
 { #category : #'primitive generators' }
@@ -1453,89 +1223,6 @@ CogObjectRepresentation >> genPrimitiveShallowCopy [
 ]
 
 { #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatAdd [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatArithmetic: AddRdRd preOpCheck: nil
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatDivide [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatArithmetic: DivRdRd preOpCheck: #genDoubleFailIfZeroArgRcvr:arg:
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatEqual [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatComparison: #JumpFPEqual: invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatGreaterOrEqual [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatComparison: #JumpFPGreaterOrEqual: invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatGreaterThan [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatComparison: #JumpFPGreater: invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatLessOrEqual [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatComparison: #JumpFPGreaterOrEqual: invert: true
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatLessThan [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatComparison: #JumpFPGreater: invert: true
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatMultiply [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatArithmetic: MulRdRd preOpCheck: nil
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatNotEqual [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatComparison: #JumpFPNotEqual: invert: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatSquareRoot [
-	<option: #Spur64BitMemoryManager>
-	| jumpFailAlloc jumpNegative |
-	<var: #jumpFailAlloc type: #'AbstractInstruction *'>
-	<var: #jumpNegative type: #'AbstractInstruction *'>
-	self genGetSmallFloatValueOf: ReceiverResultReg scratch: SendNumArgsReg into: DPFPReg0.
-	cogit
-		XorRd: DPFPReg1 Rd: DPFPReg1; "+0.0 is all zeros"
-		CmpRd: DPFPReg0 Rd: DPFPReg1.
-	jumpNegative := cogit JumpFPGreater: 0.
-	cogit SqrtRd: DPFPReg0.
-	jumpFailAlloc := self
-						genAllocFloatValue: DPFPReg0
-						into: SendNumArgsReg
-						scratchReg: ClassReg
-						scratchReg: TempReg.
-	cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-	cogit genPrimReturn.
-	jumpNegative jmpTarget: (jumpFailAlloc jmpTarget: cogit Label).
-	^0
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentation >> genPrimitiveSmallFloatSubtract [
-	<option: #Spur64BitMemoryManager>
-	^self genSmallFloatArithmetic: SubRdRd preOpCheck: nil
-]
-
-{ #category : #'primitive generators' }
 CogObjectRepresentation >> genPrimitiveStoreBoolean8IntoBytes [
 	"subclasses override if they can"
 	^UnimplementedPrimitive
@@ -1798,38 +1485,10 @@ CogObjectRepresentation >> genSmallIntegerComparison: jumpOpcode [
 CogObjectRepresentation >> genSmallIntegerComparison: jumpOpcode orDoubleComparison: jumpFPOpcodeGenerator invert: invertComparison [
 	"Stack looks like
 		return address"
-	| jumpNonInt jumpFail jumpCond r |
-	<var: #jumpFPOpcodeGenerator declareC: 'AbstractInstruction * NoDbgRegParms (*jumpFPOpcodeGenerator)(void *)'>
-	<var: #jumpNonInt type: #'AbstractInstruction *'>
-	<var: #jumpCond type: #'AbstractInstruction *'>
-	<var: #jumpFail type: #'AbstractInstruction *'>
+	| r |
 	r := self genSmallIntegerComparison: jumpOpcode.
 	r < 0 ifTrue:
 		[^r].
-	self cppIf: #DPFPReg0 defined ifTrue:
-	"Fall through on non-SmallInteger argument.  Argument may be a Float : let us check or fail"
-	[self smallIntegerIsOnlyImmediateType ifFalse:
-		[jumpNonInt := self genJumpImmediate: Arg0Reg].
-	self genGetCompactClassIndexNonImmOf: Arg0Reg into: SendNumArgsReg.
-	self genCmpClassFloatCompactIndexR: SendNumArgsReg.
-	jumpFail := cogit JumpNonZero: 0.
-
-	"It was a Float, so convert the receiver to double and perform the operation"
-	self genConvertSmallIntegerToIntegerInReg: ReceiverResultReg.
-	cogit ConvertR: ReceiverResultReg Rd: DPFPReg0.
-	self genGetDoubleValueOf: Arg0Reg into: DPFPReg1.
-	invertComparison "May need to invert for NaNs"
-		ifTrue: [cogit CmpRd: DPFPReg0 Rd: DPFPReg1]
-		ifFalse: [cogit CmpRd: DPFPReg1 Rd: DPFPReg0].
-	jumpCond := cogit perform: jumpFPOpcodeGenerator with: 0. "FP jumps are a little weird"
-	cogit genMoveFalseR: ReceiverResultReg.
-	cogit genPrimReturn.
-	jumpCond jmpTarget: (cogit genMoveTrueR: ReceiverResultReg).
-	cogit genPrimReturn.
-
-	self smallIntegerIsOnlyImmediateType
-		ifTrue: [jumpFail jmpTarget: cogit Label]
-		ifFalse: [jumpNonInt jmpTarget: (jumpFail jmpTarget: cogit Label)]].
 	^CompletePrimitive
 ]
 
@@ -1858,15 +1517,6 @@ CogObjectRepresentation >> genStoreSourceReg: sourceReg slotIndex: index destReg
 
 { #category : #initialization }
 CogObjectRepresentation >> generateLowcodeObjectTrampolines [
-	<option: #LowcodeVM>
-	ceFloatObjectOfTrampoline := cogit genTrampolineFor: #floatObjectOf:
-												called: 'ceFloatObjectOfTrampoline'
-												floatArg: DPFPReg0
-												result: TempReg.
-	ceFloatValueOfTrampoline := cogit genTrampolineFor: #floatValueOf:
-												called: 'ceFloatValueOfTrampoline'
-												arg: ReceiverResultReg
-												floatResult: DPFPReg0.
 	ceInstantiateClassIndexableSizeTrampoline := cogit genTrampolineFor: #instantiateClass:indexableSize:
 												called: 'ceInstantiateClassIndexableSizeTrampoline'
 												arg: Arg0Reg

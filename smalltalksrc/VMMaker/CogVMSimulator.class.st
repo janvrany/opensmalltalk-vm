@@ -738,10 +738,9 @@ CogVMSimulator >> dispatchOn: anInteger in: selectorArray [
 	"Simulate a case statement via selector table lookup.
 	The given integer must be between 0 and selectorArray size-1, inclusive.
 	For speed, no range test is done, since it is done by the at: operation.
-	Note that, unlike many other arrays used in the Interpreter, this method expect NO CArrayAccessor wrapping - it would duplicate the +1. Maybe this would be better updated to make it all uniform"
-	cogit breakPC ifNil:
-		[cogit breakBlock ifNotNil:
-			[:bb| (bb value: cogit) ifTrue: [self halt: 'breakpoint reached']]].
+	Note that, unlike many other arrays used in the Interpreter,
+	this method expect NO CArrayAccessor wrapping - it would duplicate the +1.
+	Maybe this would be better updated to make it all uniform"
 	self perform: (selectorArray at: (anInteger + 1)).
 ]
 
@@ -2361,7 +2360,7 @@ CogVMSimulator >> maybeCheckStackDepth: delta sp: sp pc: mcpc [
 		  and: [cogit isTrapAt: mcpc]) ifTrue:
 			[csp := csp + 1].
 		"Compensate lazily for absent receiver sends (cuz mapping is slow, even though incrememting csp is a dodgy idea)."
-		(NewspeakVM
+		(false
 		 and: [cogit isAbsentReceiverSendAt: mcpc in: cogHomeMethod]) ifTrue:
 			[csp := debugStackPointers at: bcpc put: csp + 1]].
 	self assert: asp - delta + 1 = csp
@@ -2847,7 +2846,7 @@ CogVMSimulator >> primitiveContextAtPut [
 CogVMSimulator >> primitiveDoPrimitiveWithArgs [
 	| primIndex |
 	primIndex := objectMemory integerValueOf: (self stackValue: 1).
-	NewspeakVM ifFalse:
+	false ifFalse:
 		[transcript nextPutAll: 'DO PRIMITIVE: '; print: (self functionPointerFor: primIndex inClass: nil); cr; flush].
 	(#(76 "primitiveStoreStackp" 188 189 "eval method") includes: primIndex) ifTrue:
 		[self halt].
@@ -2862,7 +2861,6 @@ CogVMSimulator >> primitiveExecuteMethod [
 
 { #category : #'control primitives' }
 CogVMSimulator >> primitiveExecuteMethodArgsArray [
-	self halt: thisContext selector.
 	^super primitiveExecuteMethodArgsArray
 ]
 
@@ -3407,20 +3405,6 @@ CogVMSimulator >> sendInvokeCallbackContext: vmCallbackContext [
 		inSuperclass: (cogThreadManager ifNil: [CoInterpreterPrimitives] ifNotNil: [CoInterpreterMT])
 ]
 
-{ #category : #UI }
-CogVMSimulator >> setBreakBlockFromString: aString [
-	| bString block |
-	bString := aString withBlanksTrimmed.
-	bString first ~= $[ ifTrue:
-		[bString := '[:ct|', bString, ']'].
-	block := [Compiler evaluate: bString for: self logged: false]
-				on: Error
-				do: [:ex|
-					UIManager default warn: ex messageText.
-					^self].
-	cogit breakBlock: block
-]
-
 { #category : #accessing }
 CogVMSimulator >> setBreakCount: anInteger [
 	breakCount := anInteger
@@ -3464,6 +3448,12 @@ CogVMSimulator >> setOwnerIndexOfProcess: aProcess to: anIndex bind: bind [
 	^self perform: #setOwnerIndexOfProcess:to:bind:
 		withArguments: {aProcess. anIndex. bind}
 		inSuperclass: (cogThreadManager ifNil: [CoInterpreterPrimitives] ifNotNil: [CoInterpreterMT])
+]
+
+{ #category : #'simulation only' }
+CogVMSimulator >> setThinshellForTest [
+	cogCodeSize := cogit defaultCogCodeSize.
+	heapBase := 2456536
 ]
 
 { #category : #'debug printing' }
@@ -3892,7 +3882,6 @@ CogVMSimulator >> utilitiesMenu: aMenuMorph [
 				ifFalse: ['single step'])
 			action: [cogit singleStep: cogit singleStep not];
 		add: 'click step' action: [cogit setClickStepBreakBlock];
-		add: 'set break pc', cogit breakPC menuPrompt, '...-ve to disable or remove' action: [cogit promptForBreakPC];
 		add: 'set break count...' action: [|s| s := UIManager default request: 'break count (dec)'.
 											s notEmpty ifTrue: [breakCount := Integer readFrom: s readStream]];
 		add: 'set break selector...' action: [|s| s := UIManager default request: 'break selector (MNU:foo for MNU)'.
@@ -3900,9 +3889,6 @@ CogVMSimulator >> utilitiesMenu: aMenuMorph [
 												[(s size > 4 and: [s beginsWith: 'MNU:'])
 													ifTrue: [self setBreakMNUSelector: (s allButFirst: 4)]
 													ifFalse: [self setBreakSelector: s]]];
-		add: 'set break block...' action: [|s| s := UIManager default request: 'break block' initialAnswer: '[:theCogit| false]'.
-											s notEmpty ifTrue: [self setBreakBlockFromString: s]];
-		add: 'set cogit break method...' action: [(self promptHex: 'cogit breakMethod') ifNotNil: [:bm| cogit setBreakMethod: bm]];
 		add: (printBytecodeAtEachStep
 				ifTrue: ['no print bytecode each bytecode']
 				ifFalse: ['print bytecode each bytecode'])

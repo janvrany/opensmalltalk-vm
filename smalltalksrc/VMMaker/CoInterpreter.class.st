@@ -147,7 +147,7 @@ CoInterpreter class >> ancilliaryClasses [
 	"Answer any extra classes to be included in the translation."
 	^(super ancilliaryClasses copyWithout: InterpreterStackPages),
 	   {	CoInterpreterStackPages.
-		CogBlockMethod. NSSendCache },
+		CogBlockMethod },
 	((Cogit ancilliaryClasses) select: [:class| class inheritsFrom: CogBlockMethod])
 ]
 
@@ -163,8 +163,6 @@ CoInterpreter class >> declareCVarsIn: aCCodeGenerator [
 	aCCodeGenerator
 		addHeaderFile:'"sqCogStackAlignment.h"';
 		addHeaderFile:'"cogmethod.h"'.
-	NewspeakVM ifTrue:
-		[aCCodeGenerator addHeaderFile:'"nssendcache.h"'].
 	aCCodeGenerator
 		addHeaderFile: (aCCodeGenerator vmClass isThreadedVM 
 			ifTrue: ['"cointerpmt.h"'] 
@@ -1490,7 +1488,7 @@ CoInterpreter >> ceCounterTripped: condition [
 	 The minor case is that there is an unlikely  possibility that the cointer tripped but condition
 	 is not a boolean, in which case a mustBeBoolean response should occur."
 	<api>
-	<option: #SistaCogit>
+
 	"Send e.g. thisContext conditionalBranchCounterTrippedOn: boolean."
 	| context counterTrippedSelector classTag classObj |
 	(condition = objectMemory falseObject
@@ -1530,169 +1528,12 @@ CoInterpreter >> ceCounterTripped: condition [
 	^true
 ]
 
-{ #category : #trampolines }
-CoInterpreter >> ceDynamicSuperSend: cacheAddress receiver: methodReceiver [
-	"A dynamic super send cache missed."
-	| nsSendCache methodReceiverClassTag cogMethod errSelIdx |
-	<api>
-	<option: #NewspeakVM>
-	<inline: false>
-	<var: #nsSendCache type: #'NSSendCache *'>
-	<var: #cogMethod type: #'CogMethod *'>
-
-	cogit assertCStackWellAligned.
-	self assert: (objectMemory addressCouldBeOop: methodReceiver).
-	self deny: (objectMemory isOopForwarded: methodReceiver).
-
-	nsSendCache := self cCoerceSimple: cacheAddress to: #'NSSendCache *'.
-	messageSelector := nsSendCache selector.
-	argumentCount := nsSendCache numArgs.
-	method := (self mframeHomeMethod: framePointer) methodObject.
-
-	self assert: (self stackValue: argumentCount + 1 "ret addr") = methodReceiver.
-
-	methodReceiverClassTag := objectMemory fetchClassTagOf: methodReceiver.
-
-	(self
-		inlineLookupInNSMethodCacheSel: messageSelector
-		classTag: methodReceiverClassTag
-		method: method
-		lookupRule: LookupRuleDynamicSuper)
-			ifTrue:
-				[self assert: localAbsentReceiverOrZero = 0.
-				"check for coggability because method is in the cache"
-				self ifAppropriateCompileToNativeCode: newMethod selector: messageSelector]
-			ifFalse:
-				[self deny: (objectMemory isOopForwarded: messageSelector).
-				self deny: (objectMemory isForwardedClassTag: methodReceiverClassTag).
-				errSelIdx := self lookupDynamicSuperSendNoMNU: methodReceiver.
-				errSelIdx ~= 0 ifTrue:
-					[self assert: errSelIdx == SelectorDoesNotUnderstand.
-					self assert: localAbsentReceiver == methodReceiver.
-					self handleMNU: errSelIdx 
-						InMachineCodeTo: methodReceiver
-						classForMessage: lkupClass.
-					self unreachable].
-				lkupClassTag := methodReceiverClassTag.
-				self addNewMethodToNSCache: LookupRuleDynamicSuper].
-
-	(self maybeMethodHasCogMethod: newMethod) 
-		ifTrue: [
-			cogMethod := self cogMethodOf: newMethod.
-			cogMethod selector = objectMemory nilObject
-				ifTrue: [cogit setSelectorOf: cogMethod to: messageSelector]
-				ifFalse: ["Deal with anonymous accessors, e.g. in Newspeak.
-					The cogMethod may not have the
-					correct selector. If not, try and compile a new method
-					with the correct selector."
-					cogMethod selector ~= messageSelector ifTrue: [
-							(cogit cog: newMethod selector: messageSelector)
-								ifNotNil: [:newCogMethod | cogMethod := newCogMethod]]].
-			cogMethod selector = messageSelector
-				ifTrue:
-					[cogit
-						linkNSSendCache: nsSendCache 
-						classTag: methodReceiverClassTag
-						enclosingObject: 0
-						target: cogMethod
-						caller: self mframeHomeMethodExport]
-				ifFalse: ["Out of code memory. Fall through to interpret."].
-			instructionPointer := self popStack.
-			self executeNewMethod.
-			self unreachable].
-	instructionPointer := self popStack.
-	self interpretMethodFromMachineCode.
-	self unreachable.
-]
-
 { #category : #'stack bytecodes' }
 CoInterpreter >> ceEnclosingObjectAt: level [
-	<api>
-	<option: #NewspeakVM>
 	^self 
 		enclosingObjectAt: level
 		withObject: (self mframeReceiver: framePointer)
 		withMixin: self mMethodClass
-]
-
-{ #category : #trampolines }
-CoInterpreter >> ceImplicitReceiverSend: cacheAddress receiver: methodReceiver [
-	"An implicit receiver send cache missed."
-	| nsSendCache methodReceiverClassTag cogMethod errSelIdx |
-	<api>
-	<option: #NewspeakVM>
-	<inline: false>
-	<var: #nsSendCache type: #'NSSendCache *'>
-	<var: #cogMethod type: #'CogMethod *'>
-
-	cogit assertCStackWellAligned.
-	self assert: (objectMemory addressCouldBeOop: methodReceiver).
-	self deny: (objectMemory isOopForwarded: methodReceiver).
-
-	nsSendCache := self cCoerceSimple: cacheAddress to: #'NSSendCache *'.
-	messageSelector := nsSendCache selector.
-	argumentCount := nsSendCache numArgs.
-	method := (self mframeHomeMethod: framePointer) methodObject.
-
-	self assert: (self stackValue: argumentCount + 1 "ret addr") = methodReceiver.
-
-	methodReceiverClassTag := objectMemory fetchClassTagOf: methodReceiver.
-
-	(self
-		inlineLookupInNSMethodCacheSel: messageSelector
-		classTag: methodReceiverClassTag
-		method: method
-		lookupRule: LookupRuleImplicit)
-			ifTrue:
-				[localAbsentReceiverOrZero = 0
-					ifTrue: [localAbsentReceiver := methodReceiver]
-					ifFalse: [localAbsentReceiver := localAbsentReceiverOrZero].
-				"check for coggability because method is in the cache"
-				self ifAppropriateCompileToNativeCode: newMethod selector: messageSelector]
-			ifFalse:
-				[self deny: (objectMemory isOopForwarded: messageSelector).
-				self deny: (objectMemory isForwardedClassTag: methodReceiverClassTag).
-				errSelIdx := self lookupImplicitReceiverSendNoMNU: methodReceiver.
-				errSelIdx ~= 0 ifTrue:
-					[self assert: errSelIdx == SelectorDoesNotUnderstand.
-					self assert: localAbsentReceiver == methodReceiver.
-					self handleMNU: errSelIdx 
-						InMachineCodeTo: methodReceiver
-						classForMessage: lkupClass.
-					self unreachable].
-				lkupClassTag := methodReceiverClassTag.
-				self addNewMethodToNSCache: LookupRuleImplicit].
-
-	"Fix stacked receiver."
-	self stackValue: argumentCount + 1 "ret addr" put: localAbsentReceiver.
-
-	(self maybeMethodHasCogMethod: newMethod) 
-		ifTrue: [
-			cogMethod := self cogMethodOf: newMethod.
-			cogMethod selector = objectMemory nilObject
-				ifTrue: [cogit setSelectorOf: cogMethod to: messageSelector]
-				ifFalse: ["Deal with anonymous accessors, e.g. in Newspeak.
-					The cogMethod may not have the
-					correct selector. If not, try and compile a new method
-					with the correct selector."
-					cogMethod selector ~= messageSelector ifTrue: [
-							(cogit cog: newMethod selector: messageSelector)
-								ifNotNil: [:newCogMethod | cogMethod := newCogMethod]]].
-			cogMethod selector = messageSelector
-				ifTrue:
-					[cogit
-						linkNSSendCache: nsSendCache 
-						classTag: methodReceiverClassTag
-						enclosingObject: localAbsentReceiverOrZero
-						target: cogMethod
-						caller: self mframeHomeMethodExport]
-				ifFalse: ["Out of code memory. Fall through to interpret."].
-			instructionPointer := self popStack.
-			self executeNewMethod.
-			self unreachable].
-	instructionPointer := self popStack.
-	self interpretMethodFromMachineCode.
-	self unreachable.
 ]
 
 { #category : #trampolines }
@@ -1907,88 +1748,6 @@ CoInterpreter >> ceNonLocalReturn: returnValue [
 ]
 
 { #category : #trampolines }
-CoInterpreter >> ceOuterSend: cacheAddress receiver: methodReceiver [
-	"An outer send cache missed."
-	| nsSendCache depth methodReceiverClassTag cogMethod errSelIdx |
-	<api>
-	<option: #NewspeakVM>
-	<inline: false>
-	<var: #nsSendCache type: #'NSSendCache *'>
-	<var: #cogMethod type: #'CogMethod *'>
-
-	cogit assertCStackWellAligned.
-	self assert: (objectMemory addressCouldBeOop: methodReceiver).
-	self deny: (objectMemory isOopForwarded: methodReceiver).
-
-	nsSendCache := self cCoerceSimple: cacheAddress to: #'NSSendCache *'.
-	messageSelector := nsSendCache selector.
-	argumentCount := nsSendCache numArgs.
-	depth := nsSendCache depth.
-	method := (self mframeHomeMethod: framePointer) methodObject.
-
-	self assert: (self stackValue: argumentCount + 1 "ret addr") = methodReceiver.
-
-	methodReceiverClassTag := objectMemory fetchClassTagOf: methodReceiver.
-
-	(self
-		inlineLookupInNSMethodCacheSel: messageSelector
-		classTag: methodReceiverClassTag
-		method: method
-		lookupRule: depth)
-			ifTrue:
-				[localAbsentReceiverOrZero = 0
-					ifTrue: [localAbsentReceiver := methodReceiver]
-					ifFalse: [localAbsentReceiver := localAbsentReceiverOrZero].
-				"check for coggability because method is in the cache"
-				self ifAppropriateCompileToNativeCode: newMethod selector: messageSelector]
-			ifFalse:
-				[self deny: (objectMemory isOopForwarded: messageSelector).
-				self deny: (objectMemory isForwardedClassTag: methodReceiverClassTag).
-				errSelIdx := self lookupOuterSendNoMNU: methodReceiver depth: depth.
-				errSelIdx ~= 0 ifTrue:
-					[self assert: errSelIdx == SelectorDoesNotUnderstand.
-					"Fix stacked receiver."
-					self stackValue: argumentCount + 1 "ret addr" put: localAbsentReceiver.
-					self handleMNU: errSelIdx 
-						InMachineCodeTo: localAbsentReceiver
-						classForMessage: lkupClass.
-					self unreachable].
-				lkupClassTag := methodReceiverClassTag. "Successful lookup cached under the sender's class"
-				self addNewMethodToNSCache: depth].
-
-	"Fix stacked receiver."
-	self stackValue: argumentCount + 1 "ret addr" put: localAbsentReceiver.
-
-	(self maybeMethodHasCogMethod: newMethod) 
-		ifTrue: [
-			cogMethod := self cogMethodOf: newMethod.
-			cogMethod selector = objectMemory nilObject
-				ifTrue: [cogit setSelectorOf: cogMethod to: messageSelector]
-				ifFalse: ["Deal with anonymous accessors, e.g. in Newspeak.
-					The cogMethod may not have the
-					correct selector. If not, try and compile a new method
-					with the correct selector."
-					cogMethod selector ~= messageSelector ifTrue: [
-							(cogit cog: newMethod selector: messageSelector)
-								ifNotNil: [:newCogMethod | cogMethod := newCogMethod]]].
-			cogMethod selector = messageSelector
-				ifTrue:
-					[cogit
-						linkNSSendCache: nsSendCache 
-						classTag: methodReceiverClassTag
-						enclosingObject: localAbsentReceiverOrZero
-						target: cogMethod
-						caller: self mframeHomeMethodExport]
-				ifFalse: ["Out of code memory. Fall through to interpret."].
-			instructionPointer := self popStack.
-			self executeNewMethod.
-			self unreachable].
-	instructionPointer := self popStack.
-	self interpretMethodFromMachineCode.
-	self unreachable.
-]
-
-{ #category : #trampolines }
 CoInterpreter >> ceReapAndResetErrorCodeFor: cogMethod [
 	<api>
 	<var: #cogMethod type: #'CogMethod *'>
@@ -2021,81 +1780,6 @@ CoInterpreter >> ceReturnToInterpreter: anOop [
 	self siglong: reenterInterpreter jmp: ReturnToInterpreter.
 	"NOTREACHED"
 	^nil
-]
-
-{ #category : #trampolines }
-CoInterpreter >> ceSelfSend: cacheAddress receiver: methodReceiver [
-	"A self send cache missed."
-	| nsSendCache methodReceiverClassTag cogMethod errSelIdx |
-	<api>
-	<option: #NewspeakVM>
-	<inline: false>
-	<var: #nsSendCache type: #'NSSendCache *'>
-	<var: #cogMethod type: #'CogMethod *'>
-
-	cogit assertCStackWellAligned.
-	self assert: (objectMemory addressCouldBeOop: methodReceiver).
-	self deny: (objectMemory isOopForwarded: methodReceiver).
-
-	nsSendCache := self cCoerceSimple: cacheAddress to: #'NSSendCache *'.
-	messageSelector := nsSendCache selector.
-	argumentCount := nsSendCache numArgs.
-	method := (self mframeHomeMethod: framePointer) methodObject.
-
-	self assert: (self stackValue: argumentCount + 1 "ret addr") = methodReceiver.
-
-	methodReceiverClassTag := objectMemory fetchClassTagOf: methodReceiver.
-
-	(self
-		inlineLookupInNSMethodCacheSel: messageSelector
-		classTag: methodReceiverClassTag
-		method: method
-		lookupRule: LookupRuleSelf)
-			ifTrue:
-				[self assert: localAbsentReceiverOrZero = 0.
-				"check for coggability because method is in the cache"
-				self ifAppropriateCompileToNativeCode: newMethod selector: messageSelector]
-			ifFalse:
-				[self deny: (objectMemory isOopForwarded: messageSelector).
-				self deny: (objectMemory isForwardedClassTag: methodReceiverClassTag).
-				errSelIdx := self lookupOuterSendNoMNU: methodReceiver depth: 0.
-				errSelIdx ~= 0 ifTrue:
-					[self assert: errSelIdx == SelectorDoesNotUnderstand.
-					self assert: localAbsentReceiver == methodReceiver.
-					self handleMNU: errSelIdx 
-						InMachineCodeTo: methodReceiver
-						classForMessage: lkupClass.
-					self unreachable].
-				lkupClassTag := methodReceiverClassTag.
-				self addNewMethodToNSCache: LookupRuleSelf].
-
-	(self maybeMethodHasCogMethod: newMethod) 
-		ifTrue: [
-			cogMethod := self cogMethodOf: newMethod.
-			cogMethod selector = objectMemory nilObject
-				ifTrue: [cogit setSelectorOf: cogMethod to: messageSelector]
-				ifFalse: ["Deal with anonymous accessors, e.g. in Newspeak.
-					The cogMethod may not have the
-					correct selector. If not, try and compile a new method
-					with the correct selector."
-					cogMethod selector ~= messageSelector ifTrue: [
-							(cogit cog: newMethod selector: messageSelector)
-								ifNotNil: [:newCogMethod | cogMethod := newCogMethod]]].
-			cogMethod selector = messageSelector
-				ifTrue:
-					[cogit
-						linkNSSendCache: nsSendCache 
-						classTag: methodReceiverClassTag
-						enclosingObject: 0
-						target: cogMethod
-						caller: self mframeHomeMethodExport]
-				ifFalse: ["Out of code memory. Fall through to interpret."].
-			instructionPointer := self popStack.
-			self executeNewMethod.
-			self unreachable].
-	instructionPointer := self popStack.
-	self interpretMethodFromMachineCode.
-	self unreachable.
 ]
 
 { #category : #trampolines }
@@ -3594,7 +3278,7 @@ CoInterpreter >> findNewMethodInClassTag: classTagArg [
 					[^self ifAppropriateCompileToNativeCode: newMethod selector: messageSelector]].
 			 "entry was not found in the cache; look it up the hard way "
 			 lkupClass := objectMemory classForClassTag: classTag.
-			 NewspeakVM
+			 false
 				ifTrue: [self lookupOrdinarySend]
 				ifFalse: [self lookupMethodInClass: lkupClass].
 			 self addNewMethodToCache: lkupClass]
@@ -4026,8 +3710,6 @@ CoInterpreter >> getDesiredCogCodeSize [
 
 { #category : #accessing }
 CoInterpreter >> getFramePointer [
-	<api>
-	<option: #NewspeakVM>
 	^framePointer
 ]
 
@@ -4488,9 +4170,7 @@ CoInterpreter >> internalFindNewMethodOrdinary [
 					[^self ifAppropriateCompileToNativeCode: newMethod selector: messageSelector]].
 			lkupClass := objectMemory classForClassTag: lkupClassTag.
 			self assert: (lkupClass notNil and: [self addressCouldBeClassObj: lkupClass]).
-			NewspeakVM
-				ifTrue: [self lookupOrdinarySend]
-				ifFalse: [self lookupMethodInClass: lkupClass].
+			self lookupMethodInClass: lkupClass.
 			self internalizeIPandSP.
 			self addNewMethodToCache: lkupClass]
 ]
@@ -4837,7 +4517,7 @@ CoInterpreter >> lookupMNU: selector receiver: rcvr [
 	"self printFrame: stackPage headFP WithSP: stackPage headSP"
 	"self printStringOf: selector"
 	classTag := objectMemory fetchClassTagOf: rcvr.
-	NewspeakVM
+	false
 	  	ifTrue:
 			[inCache := self
 							inlineLookupInNSMethodCacheSel: selector
@@ -7824,12 +7504,7 @@ CoInterpreter >> updateStateOfSpouseContextForFrame: theFP WithSP: theSP [
 
 { #category : #'debug support' }
 CoInterpreter >> validInstructionPointer: instrPointer inMethod: aMethod framePointer: fp [
-	<var: #instrPointer type: #usqInt>
-	<var: #aMethod type: #usqInt>
-	<var: #fp type: #'char *'>
 	| theInstrPointer cogMethod |
-	<var: #theInstrPointer type: #usqInt>
-	<var: #cogMethod type: #'CogMethod *'>
 	instrPointer = cogit ceCannotResumePC ifTrue:
 		[^self isMachineCodeFrame: fp].
 	instrPointer = cogit ceReturnToInterpreterPC
@@ -7838,21 +7513,15 @@ CoInterpreter >> validInstructionPointer: instrPointer inMethod: aMethod framePo
 				[^false].
 			 theInstrPointer := self iframeSavedIP: fp]
 		ifFalse:
-			[theInstrPointer := instrPointer.
-			 NewspeakVM
-				ifTrue:
-					[(self isMachineCodeFrame: fp) ifTrue:
-						[cogMethod := self mframeHomeMethod: fp.
-						 ^theInstrPointer >= (cogMethod asUnsignedInteger + (cogit sizeof: CogMethod))
-						   and: [theInstrPointer < (cogMethod asUnsignedInteger + cogMethod blockSize)]]]
-				ifFalse:
-					[| header |
-					 header := self rawHeaderOf: aMethod.
+			[
+			| header |
+			theInstrPointer := instrPointer.
+			header := self rawHeaderOf: aMethod.
 					 ((self isCogMethodReference: header)
 					   and: [theInstrPointer < objectMemory startOfMemory]) ifTrue:
 					 	[cogMethod := self cCoerceSimple: header to: #'CogMethod *'.
 					 	 ^theInstrPointer >= (header + (cogit sizeof: CogMethod))
-					 	 and: [theInstrPointer < (header + cogMethod blockSize)]]]].
+					 	 and: [theInstrPointer < (header + cogMethod blockSize)]]].
 	^super validInstructionPointer: theInstrPointer inMethod: aMethod framePointer: fp
 ]
 

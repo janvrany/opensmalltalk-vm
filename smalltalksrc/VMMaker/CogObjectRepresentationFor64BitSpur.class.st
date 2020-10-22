@@ -394,18 +394,6 @@ CogObjectRepresentationFor64BitSpur >> genConvertSmallIntegerToIntegerInReg: reg
 	^0
 ]
 
-{ #category : #'primitive generators' }
-CogObjectRepresentationFor64BitSpur >> genDoubleArithmetic: arithmeticOperator preOpCheck: preOpCheckOrNil [
-	<inline: true>
-	^self genFloatArithmetic: arithmeticOperator preOpCheck: preOpCheckOrNil boxed: true
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationFor64BitSpur >> genDoubleComparison: jumpOpcodeGenerator invert: invertComparison [
-	<inline: true>
-	^self genFloatComparison: jumpOpcodeGenerator invert: invertComparison boxed: true
-]
-
 { #category : #'compile abstract instructions' }
 CogObjectRepresentationFor64BitSpur >> genFetchIndexRegister: indexReg from: tableObj into: destReg [
 	"indexReg contains the 1-relative index of an element in tableObj.
@@ -415,94 +403,6 @@ CogObjectRepresentationFor64BitSpur >> genFetchIndexRegister: indexReg from: tab
 	cogit genMoveConstant: tableObj R: destReg.
 	cogit MoveXwr: indexReg R: destReg R: destReg.
 	^0
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationFor64BitSpur >> genFloatArithmetic: arithmeticOperator preOpCheck: preOpCheckOrNil boxed: rcvrBoxed [
-	<var: #preOpCheckOrNil declareC: 'AbstractInstruction *(*preOpCheckOrNil)(int rcvrReg, int argReg)'>
-	<inline: false>
-	| jumpFailAlloc jumpFailCheck jumpImmediate jumpNotSmallFloat jumpNotSmallInteger jumpNotBoxedFloat doOp |
-	<var: #jumpNotSmallInteger type: #'AbstractInstruction *'>
-	<var: #jumpNotBoxedFloat type: #'AbstractInstruction *'>
-	<var: #jumpNotSmallFloat type: #'AbstractInstruction *'>
-	<var: #jumpImmediate type: #'AbstractInstruction *'>
-	<var: #jumpFailCheck type: #'AbstractInstruction *'>
-	<var: #jumpFailAlloc type: #'AbstractInstruction *'>
-	<var: #doOp type: #'AbstractInstruction *'>
-	cogit genLoadArgAtDepth: 0 into: Arg0Reg.
-	rcvrBoxed
-		ifTrue: [self genGetDoubleValueOf: ReceiverResultReg into: DPFPReg0]
-		ifFalse: [self genGetSmallFloatValueOf: ReceiverResultReg scratch: TempReg into: DPFPReg0].
-	jumpNotSmallFloat := self genJumpNotSmallFloat: Arg0Reg.
-	self genGetSmallFloatValueOf: Arg0Reg scratch: TempReg into: DPFPReg1.
-	doOp := cogit Label.
-	preOpCheckOrNil ifNotNil:
-		[jumpFailCheck := cogit perform: preOpCheckOrNil with: DPFPReg0 with: DPFPReg1].
-	cogit gen: arithmeticOperator operand: DPFPReg1 operand: DPFPReg0.
-	jumpFailAlloc := self genAllocFloatValue: DPFPReg0 into: SendNumArgsReg scratchReg: ClassReg scratchReg: TempReg.
-	cogit MoveR: SendNumArgsReg R: ReceiverResultReg.
-	cogit genPrimReturn.
-	jumpNotSmallFloat jmpTarget: cogit Label.
-	jumpNotSmallInteger := self genJumpNotSmallInteger: Arg0Reg.
-	cogit MoveR: Arg0Reg R: Arg1Reg.
-	self genConvertSmallIntegerToIntegerInReg: Arg1Reg.
-	cogit ConvertR: Arg1Reg Rd: DPFPReg1.
-	cogit Jump: doOp.
-	jumpNotSmallInteger jmpTarget: cogit Label.
-	jumpImmediate := self genJumpImmediate: Arg0Reg.
-	self genGetCompactClassIndexNonImmOf: Arg0Reg into: SendNumArgsReg.
-	self genCmpClassFloatCompactIndexR: SendNumArgsReg.
-	jumpNotBoxedFloat := cogit JumpNonZero: 0.
-	self genGetDoubleValueOf: Arg0Reg into: DPFPReg1.
-	cogit Jump: doOp.
-	jumpImmediate jmpTarget:
-	(jumpNotBoxedFloat jmpTarget:
-	(jumpNotSmallInteger jmpTarget:
-	(jumpFailAlloc jmpTarget: cogit Label))).
-	preOpCheckOrNil ifNotNil:
-		[jumpFailCheck jmpTarget: jumpFailAlloc getJmpTarget].
-	^0
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationFor64BitSpur >> genFloatComparison: jumpOpcodeGenerator invert: invertComparison boxed: rcvrBoxed [
-	<var: #jumpOpcodeGenerator declareC: 'AbstractInstruction *(*jumpOpcodeGenerator)(void *)'>
-	<inline: false>
-	| jumpImmediate jumpNotSmallFloat jumpNotSmallInteger jumpNotBoxedFloat jumpCond compare |
-	<var: #jumpNotSmallInteger type: #'AbstractInstruction *'>
-	<var: #jumpNotBoxedFloat type: #'AbstractInstruction *'>
-	<var: #jumpNotSmallFloat type: #'AbstractInstruction *'>
-	<var: #jumpImmediate type: #'AbstractInstruction *'>
-	<var: #jumpCond type: #'AbstractInstruction *'>
-	cogit genLoadArgAtDepth: 0 into: Arg0Reg.
-	rcvrBoxed
-		ifTrue: [self genGetDoubleValueOf: ReceiverResultReg into: DPFPReg0]
-		ifFalse: [self genGetSmallFloatValueOf: ReceiverResultReg scratch: TempReg into: DPFPReg0].
-	jumpNotSmallFloat := self genJumpNotSmallFloat: Arg0Reg.
-	self genGetSmallFloatValueOf: Arg0Reg scratch: TempReg into: DPFPReg1.
-	compare := invertComparison "May need to invert for NaNs"
-					ifTrue: [cogit CmpRd: DPFPReg0 Rd: DPFPReg1]
-					ifFalse: [cogit CmpRd: DPFPReg1 Rd: DPFPReg0].
-	jumpCond := cogit perform: jumpOpcodeGenerator with: 0. "FP jumps are a little weird"
-	cogit genMoveFalseR: ReceiverResultReg.
-	cogit genPrimReturn.
-	jumpCond jmpTarget: (cogit genMoveTrueR: ReceiverResultReg).
-	cogit genPrimReturn.
-	jumpNotSmallFloat jmpTarget: cogit Label.
-	jumpNotSmallInteger := self genJumpNotSmallInteger: Arg0Reg.
-	self genConvertSmallIntegerToIntegerInReg: Arg0Reg.
-	cogit ConvertR: Arg0Reg Rd: DPFPReg1.
-	cogit Jump: compare.
-	jumpNotSmallInteger jmpTarget: cogit Label.
-	jumpImmediate := self genJumpImmediate: Arg0Reg.
-	self genGetCompactClassIndexNonImmOf: Arg0Reg into: SendNumArgsReg.
-	self genCmpClassFloatCompactIndexR: SendNumArgsReg.
-	jumpNotBoxedFloat := cogit JumpNonZero: 0.
-	self genGetDoubleValueOf: Arg0Reg into: DPFPReg1.
-	cogit Jump: compare.
-	jumpImmediate jmpTarget:
-	(jumpNotBoxedFloat jmpTarget: cogit Label).
-	^CompletePrimitive
 ]
 
 { #category : #'compile abstract instructions' }
@@ -2512,18 +2412,6 @@ CogObjectRepresentationFor64BitSpur >> genRemoveSmallIntegerTagsInScratchReg: sc
 CogObjectRepresentationFor64BitSpur >> genShiftAwaySmallIntegerTagsInScratchReg: scratchReg [
 	cogit ArithmeticShiftRightCq: objectMemory numTagBits R: scratchReg.
 	^0
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationFor64BitSpur >> genSmallFloatArithmetic: arithmeticOperator preOpCheck: preOpCheckOrNil [
-	<inline: true>
-	^self genFloatArithmetic: arithmeticOperator preOpCheck: preOpCheckOrNil boxed: false
-]
-
-{ #category : #'primitive generators' }
-CogObjectRepresentationFor64BitSpur >> genSmallFloatComparison: jumpOpcodeGenerator invert: invertComparison [
-	<inline: true>
-	^self genFloatComparison: jumpOpcodeGenerator invert: invertComparison boxed: false
 ]
 
 { #category : #initialization }

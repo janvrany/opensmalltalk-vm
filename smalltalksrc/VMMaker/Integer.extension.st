@@ -12,6 +12,11 @@ Integer >> addBreakpoint: address [
 ]
 
 { #category : #'*VMMaker-interpreter simulator' }
+Integer >> asAddress [
+	^self
+]
+
+{ #category : #'*VMMaker-interpreter simulator' }
 Integer >> asC_int [
 	^self >= 0
 		ifTrue: [self bitAnd: 16rFFFFFFFF]
@@ -113,6 +118,14 @@ Integer >> bitInvert64 [
 	^self bitXor: 16rFFFFFFFFFFFFFFFF
 ]
 
+{ #category : #'*VMMaker' }
+Integer >> byteSwap16 [
+	"swap the bytes of a 16 bit unsigned integer"
+	"16rAABB byteSwap16"
+	
+	^(self bitAnd: 16rFF) << 8 bitOr: (self bitAnd: 16rFF00) >> 8
+]
+
 { #category : #'*VMMaker-bit manipulation' }
 Integer >> byteSwap32 [
 	"swap the bytes of a 32 bit unsigned integer"
@@ -168,6 +181,16 @@ Integer >> coerceTo: cTypeString sim: interpreter [
 			interpreter: interpreter address: self unitSize: unitSize;
 			yourself].
 	^self  "C number (int, char, float, etc)"
+]
+
+{ #category : #'*VMMaker-interpreter simulator' }
+Integer >> fitsInSigned16 [
+	^self between: -32768 and: 32767
+]
+
+{ #category : #'*VMMaker-interpreter simulator' }
+Integer >> fitsInUnsigned16 [
+	^self between: 0 and: 16rFFFF
 ]
 
 { #category : #'*VMMaker-printing' }
@@ -286,9 +309,4 @@ Integer >> signedIntToShort [
 	"Produces a 16-bit value in twos-comp form. Truncates if out-of-range as per a C cast"
 
 	^self bitAnd: 16rFFFF
-]
-
-{ #category : #'*VMMaker-interpreter simulator' }
-Integer >> singleStepRequiredToTriggerIn: aCogit [
-	^self between: aCogit cogCodeBase and: aCogit methodZone limitZony
 ]

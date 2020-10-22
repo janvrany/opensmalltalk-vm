@@ -130,8 +130,6 @@ CogMethodZone >> addToOpenPICList: anOpenPIC [
 
 { #category : #accessing }
 CogMethodZone >> addToUnpairedMethodList: aCogMethod [
-	<option: #NewspeakVM>
-	<var: #aCogMethod type: #'CogMethod *'>
 	self assert: aCogMethod cmType = CMMethod.
 	self assert: (cogit noAssertMethodClassAssociationOf: aCogMethod methodObject) = objectMemory nilObject.
 	self assert: (unpairedMethodList == nil
@@ -163,10 +161,6 @@ CogMethodZone >> allocate: numBytes [
 	allocation := mzFreeStart.
 	mzFreeStart := mzFreeStart + roundedBytes.
 	methodCount := methodCount + 1.
-	self cCode: '' inSmalltalk:
-		[(cogit breakPC isInteger
-		   and: [cogit breakPC between: allocation and: mzFreeStart]) ifTrue:
-			[cogit singleStep: true]].
 	^allocation
 ]
 
@@ -180,8 +174,6 @@ CogMethodZone >> allocationLimit [
 CogMethodZone >> clearCogCompiledCode [
 	"Free all methods"
 	| cogMethod |
-	<var: #cogMethod type: #'CogMethod *'>
-	NewspeakVM ifTrue: [unpairedMethodList := nil].
 	cogMethod := coInterpreter cCoerceSimple: baseAddress to: #'CogMethod *'.
 	[cogMethod asUnsignedInteger < mzFreeStart] whileTrue:
 		[cogMethod cmType = CMMethod ifTrue:
@@ -227,21 +219,18 @@ CogMethodZone >> cogit [
 { #category : #compaction }
 CogMethodZone >> compactCompiledCode [
 	| objectHeaderValue source dest bytes |
-	<var: #source type: #'CogMethod *'>
-	<var: #dest type: #'CogMethod *'>
 	compactionInProgress := true.
 	objectHeaderValue := objectMemory nullHeaderForMachineCodeMethod.
 	source := coInterpreter cCoerceSimple: baseAddress to: #'CogMethod *'.
 	self voidOpenPICList. "The list will be rebuilt with the current live set"
 	methodCount := 0.
-	NewspeakVM ifTrue: [unpairedMethodList := nil].
 	[source < self limitZony
 	 and: [source cmType ~= CMFree]] whileTrue:
 		[self assert: (cogit cogMethodDoesntLookKosher: source) = 0.
 		 source objectHeader: objectHeaderValue.
 		 source cmUsageCount > 0 ifTrue:
 			[source cmUsageCount: source cmUsageCount // 2].
-		 NewspeakVM ifTrue:
+		 false ifTrue:
 				[(source cmType = CMMethod
 				  and: [(coInterpreter rawHeaderOf: source methodObject) asInteger ~= source asInteger]) ifTrue:
 					[source nextMethodOrIRCs: unpairedMethodList.
@@ -272,7 +261,7 @@ CogMethodZone >> compactCompiledCode [
 							[coInterpreter rawHeaderOf: dest methodObject put: dest asInteger]
 						ifFalse:
 							[self assert: (cogit noAssertMethodClassAssociationOf: dest methodObject) = objectMemory nilObject.
-							 NewspeakVM ifTrue:
+							 false ifTrue:
 								[dest nextMethodOrIRCs: unpairedMethodList.
 								 unpairedMethodList := dest asUnsignedInteger]]]
 				ifFalse:
@@ -325,8 +314,6 @@ CogMethodZone >> findPreviouslyCompiledVersionOf: aMethodObj with: aSelectorOop 
 	 the right one.  It is therefore worth-while searching for a cog method on this bytecoded
 	 method that has the right selector.  To speed up the search we maintain all such unpaired
 	 methods on the unpairedMethodList, which is linked through nextMethodOrIRCs."
-	<returnTypeC: #'CogMethod *'>
-	<option: #NewspeakVM>
 	| cogMethod |
 	<var: #cogMethod type: #'CogMethod *'>
 	((coInterpreter methodHasCogMethod: aMethodObj)
@@ -366,14 +353,14 @@ CogMethodZone >> freeMethod: cogMethod [
 		 (coInterpreter rawHeaderOf: cogMethod methodObject) asInteger = cogMethod asInteger
 			ifTrue:
 				[coInterpreter rawHeaderOf: cogMethod methodObject put: cogMethod methodHeader.
-				 NewspeakVM ifTrue:
+				 false ifTrue:
 					[(objectRepresentation canPinObjects and: [cogMethod nextMethodOrIRCs > self zoneEnd]) ifTrue:
 						[objectRepresentation freeIRCs: cogMethod nextMethodOrIRCs]]]
 			ifFalse:
 				[self cCode: [self assert: (cogit noAssertMethodClassAssociationOf: cogMethod methodObject) = objectMemory nilObject]
 					inSmalltalk: [self assert: ((cogit noAssertMethodClassAssociationOf: cogMethod methodObject) = objectMemory nilObject
 											or: [coInterpreter isKindOf: CurrentImageCoInterpreterFacade])].
-				 NewspeakVM ifTrue:
+				 false ifTrue:
 					[self removeFromUnpairedMethodList: cogMethod]].
 		 cogit maybeFreeCountersOf: cogMethod].
 	cogMethod cmType = CMOpenPIC ifTrue:
@@ -465,7 +452,6 @@ CogMethodZone >> manageFrom: theStartAddress to: theLimitAddress [
 	mzFreeStart := baseAddress := theStartAddress.
 	youngReferrers := limitAddress := theLimitAddress.
 	openPICList := nil.
-	NewspeakVM ifTrue: [unpairedMethodList := nil].
 	methodBytesFreedSinceLastCompaction := 0.
 	methodCount := 0
 ]
@@ -861,10 +847,7 @@ CogMethodZone >> removeFromOpenPICList: anOpenPIC [
 
 { #category : #accessing }
 CogMethodZone >> removeFromUnpairedMethodList: aCogMethod [
-	<option: #NewspeakVM>
-	<var: #aCogMethod type: #'CogMethod *'>
 	| prevMethod |
-	<var: #prevMethod type: #'CogMethod *'>
 	self assert: aCogMethod cmType = CMMethod.
 	aCogMethod asUnsignedInteger = unpairedMethodList ifTrue:
 		[unpairedMethodList := aCogMethod nextMethodOrIRCs.

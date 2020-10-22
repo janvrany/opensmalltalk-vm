@@ -57,7 +57,9 @@ Class {
 		'dependent',
 		'cogit',
 		'objectMemory',
-		'bcpc'
+		'bcpc',
+		'generatorChain',
+		'breakHW'
 	],
 	#classVars : [
 		'NumOperands'
@@ -447,6 +449,11 @@ CogAbstractInstruction >> annotation: aByte [
 	^annotation := aByte
 ]
 
+{ #category : #accessing }
+CogAbstractInstruction >> asAddress [
+	^address
+]
+
 { #category : #coercion }
 CogAbstractInstruction >> asInteger [
 	<doNotGenerate>
@@ -469,31 +476,6 @@ CogAbstractInstruction >> asUnsignedInteger [
 CogAbstractInstruction >> asUnsignedIntegerPtr [
 	<doNotGenerate>
 	^self
-]
-
-{ #category : #'register allocation' }
-CogAbstractInstruction >> availableFloatRegisterOrNoneFor: liveRegsMask [
-	"Answer an unused abstract register in the liveRegMask.
-	 Subclasses with more registers can override to answer them."
-	<returnTypeC: #sqInt>
-	(liveRegsMask anyMask: (cogit registerMaskFor: DPFPReg0)) ifFalse:
-		[^DPFPReg0].
-	(liveRegsMask anyMask: (cogit registerMaskFor: DPFPReg1)) ifFalse:
-		[^DPFPReg1].
-	(liveRegsMask anyMask: (cogit registerMaskFor: DPFPReg2)) ifFalse:
-		[^DPFPReg2].
-	(liveRegsMask anyMask: (cogit registerMaskFor: DPFPReg3)) ifFalse:
-		[^DPFPReg3].
-	(liveRegsMask anyMask: (cogit registerMaskFor: DPFPReg4)) ifFalse:
-		[^DPFPReg4].
-	(liveRegsMask anyMask: (cogit registerMaskFor: DPFPReg5)) ifFalse:
-		[^DPFPReg5].
-	(liveRegsMask anyMask: (cogit registerMaskFor: DPFPReg6)) ifFalse:
-		[^DPFPReg6].
-	(liveRegsMask anyMask: (cogit registerMaskFor: DPFPReg7)) ifFalse:
-		[^DPFPReg7].
-
-	^ NoReg
 ]
 
 { #category : #'register allocation' }
@@ -536,6 +518,11 @@ CogAbstractInstruction >> between: min and: max [
 	^(opcodesArray identityIndexOf: self)
 		between: (opcodesArray identityIndexOf: min)
 		and: (opcodesArray identityIndexOf: max)
+]
+
+{ #category : #'TA Assembler' }
+CogAbstractInstruction >> breakHW [
+	breakHW := true
 ]
 
 { #category : #testing }
@@ -595,6 +582,11 @@ CogAbstractInstruction >> canZeroExtend [
 	^false
 ]
 
+{ #category : #'TA Assembler' }
+CogAbstractInstruction >> clearHW [
+	breakHW := false
+]
+
 { #category : #initialization }
 CogAbstractInstruction >> cloneLiteralFrom: existingLiteral [
 	"For out-of-line literal support, clone a literal from a literal."
@@ -629,11 +621,7 @@ CogAbstractInstruction >> cogit: aCogit [
 
 { #category : #'generate machine code' }
 CogAbstractInstruction >> computeJumpTargetOffsetPlus: anPCOffset [
-	<inline: true> "Since it's an extraction from other methods."
-	| jumpTarget |
-	<var: #jumpTarget type: #'AbstractInstruction *'>
-	jumpTarget := self jumpTargetAddress.
-	^jumpTarget signedIntFromLong - (address + anPCOffset) signedIntFromLong.
+	^self jumpTargetAddress signedIntFromLong - (address + anPCOffset) signedIntFromLong.
 ]
 
 { #category : #'generate machine code' }
@@ -642,8 +630,13 @@ CogAbstractInstruction >> concretizeAt: actualAddress [
 	 setting machineCodeSize, and answer the following address."
 
 	address := actualAddress.
+	
+"address = 16r2438c ifTrue: [ self halt ]."
+"cogit processor gdb insertHWBreakpointAt: 16r25ecc"
+	
 	self dispatchConcretize.
 	self assert: (maxSize = nil or: [maxSize >= machineCodeSize]).
+"self logEmittedCode."
 	^actualAddress + machineCodeSize
 ]
 
@@ -683,12 +676,9 @@ CogAbstractInstruction >> disassemble [
 
 { #category : #'full transfer run-time support' }
 CogAbstractInstruction >> disassembleOn: aStream [
-	<doNotGenerate>
-	cogit processor
-		disassembleFrom: 0
-		to: machineCodeSize - 1
-		in: machineCode object
-		on: aStream
+	address isInteger ifFalse: [ ^aStream nextPutAll: '<Not natizived yet??>' ].
+	machineCode object do: [ :eachEncoding |
+		eachEncoding isNil ifFalse: [ aStream nextPutAll: (self pdl disassemble: eachEncoding); cr ]]
 ]
 
 { #category : #abi }
@@ -787,7 +777,9 @@ CogAbstractInstruction >> genLoadCStackPointers [
 CogAbstractInstruction >> genLoadStackPointers [
 	"Switch back to the Smalltalk stack. Assign SPReg first
 	 because typically it is used immediately afterwards."
-	self subclassResponsibility
+	cogit MoveAw: cogit stackPointerAddress R: SPReg.
+	cogit MoveAw: cogit framePointerAddress R: FPReg.
+	^0
 ]
 
 { #category : #abi }
@@ -934,6 +926,16 @@ CogAbstractInstruction >> generateLowLevelUnlock: vmOwnerLockAddress [
 ]
 
 { #category : #accessing }
+CogAbstractInstruction >> generatorChain [
+	^ generatorChain
+]
+
+{ #category : #accessing }
+CogAbstractInstruction >> generatorChain: anObject [
+	generatorChain := anObject
+]
+
+{ #category : #accessing }
 CogAbstractInstruction >> getDefaultCogCodeSize [
 	"Answer the default number of bytes to allocate for native code at startup.
 	 The actual value can be set via vmParameterAt: and/or a preference in the ini file.
@@ -1037,6 +1039,11 @@ CogAbstractInstruction >> initializeUniqueLiteral: literal [
 ]
 
 { #category : #disassembly }
+CogAbstractInstruction >> instructionAt: pc [
+	^self pdl decode: (objectMemory longAt: pc)
+]
+
+{ #category : #disassembly }
 CogAbstractInstruction >> instructionSizeAt: pc [
 	"Answer the instruction size at pc. This is used in method disassembly
 	 to decode the jumps in block dispatch to discover where block methods
@@ -1068,7 +1075,9 @@ CogAbstractInstruction >> isBigEndian [
 { #category : #testing }
 CogAbstractInstruction >> isCallPrecedingReturnPC: mcpc [
 	"Assuming mcpc is a send return pc answer if the instruction before it is a call (not a CallFull)."
-	^self subclassResponsibility
+	| call |
+	call := self instructionAt: mcpc-4.
+	^call isCall
 ]
 
 { #category : #testing }
@@ -1094,15 +1103,12 @@ CogAbstractInstruction >> isWithinMwOffsetRange: anAddress [
 { #category : #accessing }
 CogAbstractInstruction >> jmpTarget: anAbstractInstruction [
 	"Set the target of a jump instruction.  These all have the target in the first operand."
-	<returnTypeC: #'AbstractInstruction *'>
-	<var: #anAbstractInstruction type: #'AbstractInstruction *'>
-	self cCode: [] "check for inadvertent smashing of already-set jmpTargets; development only"
-		inSmalltalk: [self assert: ((operands at: 0)
+	self assert: ((operands at: 0)
 									ifNil: [true]
 									ifNotNil: [:o|
 											o = 0
 											or: [(self isAFixup: o)
-											or: [self isAnInstruction: anAbstractInstruction]]])].
+											or: [self isAnInstruction: anAbstractInstruction]]]).
 	operands at: 0 put: anAbstractInstruction asUnsignedInteger.
 	^anAbstractInstruction
 ]
@@ -1188,6 +1194,18 @@ CogAbstractInstruction >> loadPICLiteralByteSize [
 	self subclassResponsibility
 ]
 
+{ #category : #printing }
+CogAbstractInstruction >> logOneEmittedInstruction [
+	Transcript cr.
+	machineCodeSize > 0 ifTrue: [ 
+		| instrEncoding |
+		instrEncoding := self machineCodeAt: 0.
+		instrEncoding printOn: Transcript base: 16.
+	].
+	Transcript show: '   ###'.
+	self printStateOn: Transcript.
+]
+
 { #category : #'generate machine code' }
 CogAbstractInstruction >> longJumpTargetAddress [
 	<inline: true> "Since it's an extraction from other methods."
@@ -1255,11 +1273,15 @@ CogAbstractInstruction >> maxSize: size [ "<signed byte>"
 	maxSize := size
 ]
 
-{ #category : #printing }
-CogAbstractInstruction >> nameForFPRegister: reg [ "<Integer>"
-	"subclasses with special purpose registers may need to override."
-	<doNotGenerate>
-	^CogAbstractRegisters nameForFPRegister: reg
+{ #category : #'TA Assembler' }
+CogAbstractInstruction >> maybeInsertHWBreakpoint: addr [
+	breakHW = true ifTrue: [ cogit processor gdb insertHWBreakpointAt: addr ]
+]
+
+{ #category : #'TA Assembler' }
+CogAbstractInstruction >> maybeInsertHWBreakpoint: addr rtlStart: startAddr [
+	self packWithBreakpoints ifFalse: [ 	addr=startAddr ifFalse: [^self] ].
+	self maybeInsertHWBreakpoint: addr
 ]
 
 { #category : #printing }
@@ -1267,6 +1289,24 @@ CogAbstractInstruction >> nameForRegister: reg [ "<Integer>"
 	"subclasses with special purpose registers may need to override."
 	<doNotGenerate>
 	^CogAbstractRegisters nameForRegister: reg
+]
+
+{ #category : #'TA Assembler' }
+CogAbstractInstruction >> noteEmissionAt: addr rtlStartPC: startAddr [
+	| pcMap chain |
+	pcMap := cogit processor pcMap.
+	pcMap isNil ifTrue: [ ^self ].
+	chain := CogGeneratorChain new
+		cogit: cogit;
+		stack: generatorChain;
+		string: (self printString);
+		pc: addr;
+		rtlStartPC: startAddr;
+		nMachineInstrs: (machineCodeSize//4);
+		yourself.
+	pcMap at: addr put: chain. "can't put in the RTL itself, these mutate :-("
+
+	self maybeInsertHWBreakpoint: addr rtlStart: startAddr 
 ]
 
 { #category : #'abstract instructions' }
@@ -1286,7 +1326,6 @@ CogAbstractInstruction >> noteFollowingConditionalBranch: branch [
 CogAbstractInstruction >> nsSendCacheAt: callSiteReturnAddress [
 	"Answer the NSSendCache for the return address of a Newspeak
 	 self, super, outer, or implicit receiver send."
-	<option: #NewspeakVM>
 	^self subclassResponsibility
 ]
 
@@ -1356,12 +1395,26 @@ CogAbstractInstruction >> operands: anObject [
 
 { #category : #'generate machine code' }
 CogAbstractInstruction >> outputMachineCodeAt: targetAddress [
-	"By default move machine code a byte at a time
-	  Subclasses with coarser granularity can override as desired."
-	<inline: true>
-	0 to: machineCodeSize - 1 do:
+	0 to: machineCodeSize - 1 by: 4 do:
 		[:j|
-		objectMemory byteAt: targetAddress + j put: (machineCode at: j)]
+		| addressThisTime |
+		addressThisTime := targetAddress + j.
+		objectMemory longAt: addressThisTime put: (machineCode at: j // 4).
+		self noteEmissionAt: addressThisTime  rtlStartPC: targetAddress 
+		]
+]
+
+{ #category : #'TA Assembler' }
+CogAbstractInstruction >> packWithBreakpoints [
+	"Answer true if an RTL tile of N native instructions
+	should have N breakpoints (in every instruction),
+	or false if only one breakpoint at the beginning"
+	^false
+]
+
+{ #category : #'TA Assembler' }
+CogAbstractInstruction >> pdl [
+	^objectMemory memory gdb processorDescription
 ]
 
 { #category : #printing }
@@ -1386,7 +1439,7 @@ CogAbstractInstruction >> printStateOn: aStream [
 			 (format notNil and: ['rf' includes: (format at: index ifAbsent: $-)])
 				ifTrue: [aStream nextPutAll: ((format at: index) = $r
 												ifTrue: [self nameForRegister: operand]
-												ifFalse: [self nameForFPRegister: operand])]
+												ifFalse: ['how did FP registers managed to still live?'])]
 				ifFalse:
 					[aStream print: operand.
 					 (operand isInteger and: [operand > 16 and: [opcode ~= Label]]) ifTrue:
@@ -1454,9 +1507,8 @@ CogAbstractInstruction >> resolveJumpTarget [
 	| fixup |
 	self assert: self isJump.
 	fixup := cogit cCoerceSimple: (operands at: 0) to: #'BytecodeFixup *'.
-	self cCode: [] inSmalltalk:
-		[(fixup isKindOf: CogBytecodeFixup) ifTrue:
-			[self assert: (self isAFixup: fixup)]].
+	(fixup isKindOf: CogBytecodeFixup) ifTrue:
+			[self assert: (self isAFixup: fixup)].
 	(self isAFixup: fixup) ifTrue:
 		[self assert: (cogit addressIsInInstructions: fixup targetInstruction).
 		 self jmpTarget: fixup targetInstruction]
@@ -1529,6 +1581,15 @@ CogAbstractInstruction >> sizePCDependentInstructionAt: eventualAbsoluteAddress 
 	 address) or absolute address and eventualAbsoluteAddress."
 
 	self subclassResponsibility
+]
+
+{ #category : #'TA Assembler' }
+CogAbstractInstruction >> spitAll: bvs [
+	machineCodeSize := 0.
+	bvs do: [ :bv |
+		self machineCodeAt: machineCodeSize put: bv value.
+		machineCodeSize := machineCodeSize + 4 ].
+	^machineCodeSize
 ]
 
 { #category : #accessing }
