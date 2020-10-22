@@ -1,104 +1,41 @@
-# Headless OpenSmalltalk-VM for Pharo
+# TA Cog
+
+This branch is home to Tacog,
+a tool for conscious understanding of the OpenSmalltalk VM.
+As such, at the time of this writing
+(ca. OpenPOWER-NA2020)
+concerns of debugging (the process of gaining understanding)
+dominate over concerns of downstream usage (such as speed in applications).
+This is likely to change as adoption picks up.
 
 
-This is the branch of the Headless VM used for Pharo.
-This branch has the modifications required to run Pharo in a true headless environment.
-The image running on the VM is responsible of handling the UI and the events. 
-
-The image includes a default implementation of the handling of UI through the use of SDL2.
-
-For more details about the whole Pharo VM project refer to our [wiki](https://github.com/pharo-project/opensmalltalk-vm/wiki). 
-
-This is a fork of [OpenSmalltalk-vm](https://github.com/OpenSmalltalk/opensmalltalk-vm).
-We are doing our best to keep compatibility and contribute back, as long as it fits the objective of Pharo community.
-
-## CI
-
-This project is continuously built and test in the CI infrastructure located at:
-
-[https://ci.inria.fr/pharo-ci-jenkins2/job/pharo-vm/job/headless/](https://ci.inria.fr/pharo-ci-jenkins2/job/pharo-vm/job/headless/)
+The overriding design principle in Tacog is that no part of the argument
+why a construction works, is left implicit in the programmer's brain;
+so every argument must be repeatable by machine.
+The adherence to this principle will increase in the future.
 
 
-## Building
+At the same time, we wanted to stick with a real (not toy) Smalltalk,
+to avoid the common pitfalls characteristic of academic VM projects.
+For this reason, we took \[an admittedly arbitrary snapshot of\]
+the OpenSmalltalk VM as our starting point, and to always keep it running
+at every step along the transformation chain.
 
 
-For building the VM it is required the following set of tools:
-
-- A working Pharo
-- CMake (at least version 2.8.4)
-- CLang 
-- Binutils (make and friends) 
-- wget
-- unzip
-
-In Linux Fedora, it is needed to install libcurl and to create a symbolic link to alias such library with the name used by libGit.
-For doing so, it is required to do:
-
-```
-sudo ln -s /usr/lib64/libcurl.so.4 /usr/lib64/libcurl-gnutls.so.4
-```
-
-Building in OSX / Linux:
-
-```bash
-$ cmake . 
-$ make install
-```
-In some latest Ubuntu installations is required to install the package libssl-dev.
-We are working to solve this dependency as the others in the build.
-
-Building in Windows:
-
-The build in Windows, uses Cygwin. This tool should be installed, and the following Cygwin packages are needed:
-
-- cmake
-- mingw64-x86_64-clang
-- zip
-- unzip
-- wget
-- curl 
-- make
-
-```bash
-$ cmake .
-$ make install
-```
-
-The VM is built from generated code and code written by hand.
-The generated code is the result of converting Smalltalk code into C.
-This conversion is performed during the *cmake* process. 
-
-This will generate the VM in *build/dist/*
-
-###  VM flavours
-
-By default the cmake build will build a CogVM, that is, a VM configuration with JIT compilation. Our cmake configuration accepts a `FLAVOUR` argument to specify different vm flavours to build, which you can use as follows:
-
-$ cmake -DFLAVOUR=[your flavour] .
-
-The accepted flavours for the moment are as follows:
-- *CoInterpreterWithQueueFFI*: VM including JIT
-- *StackVM*: VM with context to native stack mapping, without JI
-
-## Source Directory Structure
-
-The headless mode is developed on top of code of the Cog branch of Opensmalltalk-vm.
-The code that is used without changes is stored in the *extracted* directory. 
-This allows us to easy integrate changes from and to the Cog branch.
-
-The code that has been specially created or modified for this branch is stored in *src* / *include* and *plugins*.
+The fact that the codebase in its current state does not fully conform
+to the project's overall design, is simply a reflection of this
+pragmatic engineering reality.
 
 
-- smalltalksrc: includes the tonel repository with the code in Slang.
-- generated: here VMMaker will generate the VM code.
-- includes: All non generated includes required by headless mode
-- src: All non generated code required by headless mode.
-- extracted: This code is literally the same code base used in the normal OpenSmalltalk-VM build.
-- plugins: The code of the different plugins developed for headless mode.
+Tacog is a bridge between Cog and the TA toolchain
+(MachineArithmetic / ULD / Pharo-ArchC / Petrich / PIG2),
+which is meant to server as VM implementation substrate for several
+other dialects (e.g. the Powerlang VM).
+As such, design decisions concerning the shape of submodule APIs,
+must be understood in light of this cross-dialect compatibility.
 
-## Editing the VM code in your image
+## Top-level README
 
-You can load the Pharo code of the VM using Pharo's git client Iceberg.
-You can do so by cloning directly this repository from Iceberg, or by adding an already existing clone to it.
-
-Alternatively, if you're building the VM using the instructions above, the build process does already generate a Pharo image with the VM code loaded. You'll find such Image in the `build/vmmaker` directory inside your build directory.
+This file is the Tacog README; this is so that people can
+save their precious time identifying what this branch is for.
+The main OpenSmalltalkVM README is OpenSmalltalkVM.md.
