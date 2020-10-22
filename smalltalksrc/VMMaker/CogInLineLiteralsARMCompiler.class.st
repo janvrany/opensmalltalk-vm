@@ -28,6 +28,43 @@ CogInLineLiteralsARMCompiler >> cogit: aCogit [
 	super cogit: aCogit
 ]
 
+{ #category : #'generate machine code - support' }
+CogInLineLiteralsARMCompiler >> concretizeAddCwR [
+	<operands: #(constant r)>
+	<armv5: 'mov ip, {constant bitAnd: 16rFF000000}'>
+	<armv5: 'orr ip, ip, {constant bitAnd: 16r00FF0000}'>
+	<armv5: 'orr ip, ip, {constant bitAnd: 16r0000FF00}'>
+	<armv5: 'orr ip, ip, {constant bitAnd: 16r000000FF}'>
+	<armv5: 'adds {r}, {r}, ip'>
+
+
+
+
+]
+
+{ #category : #'generate machine code - support' }
+CogInLineLiteralsARMCompiler >> concretizeCallFull [
+	<operands: #(constant)>
+	<armv5: 'mov ip, {constant bitAnd: 16rFF000000}'>
+	<armv5: 'orr ip, ip, {constant bitAnd: 16r00FF0000}'>
+	<armv5: 'orr ip, ip, {constant bitAnd: 16r0000FF00}'>
+	<armv5: 'orr ip, ip, {constant bitAnd: 16r000000FF}'>
+	<armv5: 'blx ip'>
+
+
+
+
+]
+
+{ #category : #'generate machine code - support' }
+CogInLineLiteralsARMCompiler >> concretizeMoveCwR [
+	<operands: #(constant r)>
+	<armv5: 'mov {r}, {constant bitAnd: 16rFF000000}'>
+	<armv5: 'orr {r}, {r}, {constant bitAnd: 16r00FF0000}'>
+	<armv5: 'orr {r}, {r}, {constant bitAnd: 16r0000FF00}'>
+	<armv5: 'orr {r}, {r}, {constant bitAnd: 16r000000FF}'>
+]
+
 { #category : #testing }
 CogInLineLiteralsARMCompiler >> extract32BitOperandFrom4InstructionsPreceding: addr [
 	<inline: true>

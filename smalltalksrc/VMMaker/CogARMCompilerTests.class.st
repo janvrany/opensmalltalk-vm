@@ -15,6 +15,11 @@ CogARMCompilerTests >> assertCheckQuickArithOpCodeSize: bytes [
 	self assert: bytes <= 4
 ]
 
+{ #category : #tests }
+CogARMCompilerTests >> assertSaneJumpTarget: jumpTarget [
+	self flag: #BOGUS
+]
+
 { #category : #accessing }
 CogARMCompilerTests >> concreteCompilerClass [
 	^CogARMCompilerForTests
@@ -129,6 +134,30 @@ CogARMCompilerTests >> testAdd [
 ]
 
 { #category : #tests }
+CogARMCompilerTests >> testAddRR [
+	| inst len |
+	inst := self gen: AddRR operand: 1 operand: 2.
+	len := inst concretizeAt: 0.
+	self assert: (inst machineCode long32At: 0) equals: 16rE0922001
+]
+
+{ #category : #tests }
+CogARMCompilerTests >> testAndRR [
+	| inst len |
+	inst := self gen: AndRR operand: 1 operand: 2.
+	len := inst concretizeAt: 0.
+	self assert: (inst machineCode long32At: 0) equals: 16rE0122001
+]
+
+{ #category : #tests }
+CogARMCompilerTests >> testCmpRR [
+	| inst len |
+	inst := self gen: CmpRR operand: 1 operand: 2.
+	len := inst concretizeAt: 0.
+	self assert: (inst machineCode long32At: 0) equals: 16rE1520001
+]
+
+{ #category : #tests }
 CogARMCompilerTests >> testGenerateMul [
 	"self new testGenerateMul"
 	"Currently demonstrates that the CogARMCompiler>genMulR:R: algorithm ain't gonna work too well"
@@ -162,6 +191,14 @@ CogARMCompilerTests >> testGenerateMul [
 ]
 
 { #category : #tests }
+CogARMCompilerTests >> testJumpIfEQ [
+	| inst len |
+	inst := self gen: JumpZero operand: 16r1234.
+	len := inst concretizeAt: 16r1000.
+	self assert: (inst machineCode long32At: 0) equals: 16r0A00008B
+]
+
+{ #category : #tests }
 CogARMCompilerTests >> testMoveCwR [
 	"self new testMoveCwR"
 	
@@ -184,6 +221,22 @@ CogARMCompilerTests >> testMoveCwR [
 				self assert: (self processor perform: getter) = expected].
 			self assert: self processor pc = 16]]
 
+]
+
+{ #category : #tests }
+CogARMCompilerTests >> testNegateR [
+	| inst len |
+	inst := self gen: NegateR operand: FPReg.
+	len := inst concretizeAt: 0.
+	self assert: (inst machineCode long32At: 0) equals: 16rE26BB000
+]
+
+{ #category : #tests }
+CogARMCompilerTests >> testOrRR [
+	| inst len |
+	inst := self gen: OrRR operand: 1 operand: 2.
+	len := inst concretizeAt: 0.
+	self assert: (inst machineCode long32At: 0) equals: 16rE1922001
 ]
 
 { #category : #tests }
@@ -283,6 +336,30 @@ CogARMCompilerTests >> testRetN [
 				plainJane := self strip: str.
 				self assert: (plainJane match: 'mov pc, lr').		
 		self assert: len = 8]]
+]
+
+{ #category : #tests }
+CogARMCompilerTests >> testSMULL [
+	| inst len |
+	inst := self gen: 145 "SMULL, wtf??" operand: 1 operand: 2.
+	len := inst concretizeAt: 0.
+	self assert: (inst machineCode long32At: 0) equals: 16rE0CC2192
+]
+
+{ #category : #tests }
+CogARMCompilerTests >> testSubRR [
+	| inst len |
+	inst := self gen: SubRR operand: 1 operand: 2.
+	len := inst concretizeAt: 0.
+	self assert: (inst machineCode long32At: 0) equals: 16rE0522001
+]
+
+{ #category : #tests }
+CogARMCompilerTests >> testXorRR [
+	| inst len |
+	inst := self gen: XorRR operand: 1 operand: 2.
+	len := inst concretizeAt: 0.
+	self assert: (inst machineCode long32At: 0) equals: 16rE0322001
 ]
 
 { #category : #'cogit compatibility' }

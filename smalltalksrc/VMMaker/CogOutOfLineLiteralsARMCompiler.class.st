@@ -15,6 +15,11 @@ CogOutOfLineLiteralsARMCompiler >> cmpC32RTempByteSize [
 ]
 
 { #category : #'generate machine code' }
+CogOutOfLineLiteralsARMCompiler >> computePCREL [
+	^dependent address - (address + 8)
+]
+
+{ #category : #'generate machine code' }
 CogOutOfLineLiteralsARMCompiler >> concretizeLiteral [
 	"Generate an out-of-line literal.  Copy the value and any annotation from the stand-in in the literals manager."
 	| literalAsInstruction literal |
@@ -31,6 +36,15 @@ CogOutOfLineLiteralsARMCompiler >> concretizeLiteral [
 	dependent address: address.
 	self machineCodeAt: 0 put: literal.
 	machineCodeSize := 4
+]
+
+{ #category : #concretizze }
+CogOutOfLineLiteralsARMCompiler >> concretizzeMoveMwrR_full [
+	"Emit LDR2"
+	<operands: #(offset srcReg destReg)>
+	<armv5: 'ldr ip, {self computePCREL}'>
+	<armv5: 'ldr {destReg}, [{srcReg}, ip]'>
+
 ]
 
 { #category : #accessing }
@@ -67,10 +81,16 @@ CogOutOfLineLiteralsARMCompiler >> isSharable [
 { #category : #'inline cacheing' }
 CogOutOfLineLiteralsARMCompiler >> literalBeforeFollowingAddress: followingAddress [
 	"Return the literal referenced by the instruction immediately preceding followingAddress."
-	^objectMemory longAt: (self pcRelativeAddressAt:
-		((self instructionIsLDR: (self instructionBeforeAddress: followingAddress))
-			ifTrue: [self instructionAddressBefore: followingAddress]
-			ifFalse: [self instructionAddressBefore: followingAddress - 4]))
+	| adr encoding instr |
+	adr := self instructionAddressBefore: followingAddress. "always ...-4 on RISC"
+	encoding := objectMemory longAt: adr.
+	instr := self pdl decode: encoding.
+	"There are two cases.
+	Either instr is a LDR1, or a CMP1 preceded by LDR1."
+	instr name caseOf: { 
+		['ldr1'] -> [ ^objectMemory longAt: (self pcRelativeAddressAt: adr) ].
+		['cmp1'] -> [ ^self literalBeforeFollowingAddress: adr ].
+	}
 ]
 
 { #category : #accessing }
@@ -127,12 +147,11 @@ CogOutOfLineLiteralsARMCompiler >> moveCw: constant intoR: destReg [
 	^machineCodeSize := 4
 ]
 
-{ #category : #'inline cacheing' }
-CogOutOfLineLiteralsARMCompiler >> nsSendCacheAt: callSiteReturnAddress [
-	"Answer the NSSendCache for the return address of a Newspeak
-	 self, super, outer, or implicit receiver send."
-	<inline: true>
-	^objectMemory longAt: (self pcRelativeAddressAt: (callSiteReturnAddress - 8) asUnsignedInteger)
+{ #category : #concretizze }
+CogOutOfLineLiteralsARMCompiler >> moveDependentIntoR: destReg [
+	"This is unneeded and will be removed"
+	<armv5: 'ldr {destReg}, {self computePCREL}'>
+
 ]
 
 { #category : #'compile abstract instructions' }
@@ -149,13 +168,10 @@ CogOutOfLineLiteralsARMCompiler >> outOfLineLiteralOpcodeLimit [
 { #category : #'inline cacheing' }
 CogOutOfLineLiteralsARMCompiler >> pcRelativeAddressAt: instrAddress [
 	"Extract the address of the ldr rX, [pc, #NNN] instruction at address"
-	| inst offset |
-	inst := objectMemory longAt: instrAddress.
-	self assert: (inst bitAnd: 16rFF5F0000) = (self ldr: 0 rn: PC plus: 0 imm: 0).
-	offset := inst bitAnd: 16rFFF.
-	^instrAddress + 8 + ((inst anyMask: 1 << 23)
-							ifTrue: [offset]
-							ifFalse: [offset negated])
+	| encoding inst |
+	encoding := objectMemory longAt: instrAddress.
+	inst := self pdl decode: encoding.
+	^inst pcRelativeTo: instrAddress
 ]
 
 { #category : #'inline cacheing' }
@@ -164,14 +180,12 @@ CogOutOfLineLiteralsARMCompiler >> relocateMethodReferenceBeforeAddress: pc by: 
 	 If so we don't need to relocate it in code.  So check if pc-relative code was
 	 generated, and if not, adjust a load literal.  There are two cases, a push
 	 or a register load.  If a push, then there is a register load, but in the instruction
-	 before."
-	| pcPrecedingLoad reference litAddr |
-	pcPrecedingLoad := (self instructionIsPush: (self instructionBeforeAddress: pc))
-							ifTrue: [pc - 4]
-							ifFalse: [pc].
+	 before.
+	NB: in my (bgs) runs of Reader, the push case never happens."
+	| reference litAddr |
 	"If the load is not done via pc-relative addressing we have to relocate."
-	(self isPCRelativeValueLoad: (self instructionBeforeAddress: pcPrecedingLoad)) ifFalse:
-		[litAddr := self pcRelativeAddressAt: pcPrecedingLoad.
+	(self isPCRelativeValueLoad: (self instructionBeforeAddress: pc)) ifFalse:
+		[litAddr := self pcRelativeAddressAt: pc.
 		 reference := objectMemory longAt: litAddr.
 		 objectMemory longAt: litAddr put: reference + delta]
 ]
@@ -274,11 +288,16 @@ CogOutOfLineLiteralsARMCompiler >> sizePCDependentInstructionAt: eventualAbsolut
 { #category : #'inline cacheing' }
 CogOutOfLineLiteralsARMCompiler >> storeLiteral: literal beforeFollowingAddress: followingAddress [
 	"Rewrite the literal in the instruction immediately preceding followingAddress."
+	
+	| adr encoding instr |
+	adr := self instructionAddressBefore: followingAddress. "always ...-4 on RISC"
+	encoding := objectMemory longAt: adr.
+	instr := self pdl decode: encoding.
+	"There are two cases.
+	Either instr is a LDR1, or the one before it is LDR1."
+	instr name = 'ldr1' ifFalse: [ ^self storeLiteral: literal beforeFollowingAddress: adr ].
 	objectMemory
-		longAt: (self pcRelativeAddressAt:
-					((self instructionIsLDR: (self instructionBeforeAddress: followingAddress))
-						ifTrue: [self instructionAddressBefore: followingAddress]
-						ifFalse: [self instructionAddressBefore: followingAddress - 4]))
+		longAt: (self pcRelativeAddressAt: adr)
 		put: literal
 ]
 
