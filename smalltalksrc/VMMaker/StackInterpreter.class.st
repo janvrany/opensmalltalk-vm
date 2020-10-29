@@ -2268,8 +2268,8 @@ StackInterpreter >> activateNewClosure: blockClosure outer: outerContext method:
 	self assert: (objectMemory isOopCompiledMethod: theMethod).
 
 	self push: instructionPointer.
-	self push: framePointer.
-	framePointer := stackPointer.
+	self push: self framePointer.
+	self framePointer: self stackPointer.
 	self push: theMethod.
 	self push: (self encodeFrameFieldHasContext: false isBlock: true numArgs: numArgs).
 	self push: objectMemory nilObject. "FxThisContext field"
@@ -2283,8 +2283,8 @@ StackInterpreter >> activateNewClosure: blockClosure outer: outerContext method:
 					fetchPointer: i + ClosureFirstCopiedValueIndex
 					ofObject: blockClosure)].
 
-	self assert: (self frameIsBlockActivation: framePointer).
-	self assert: (self frameHasContext: framePointer) not.
+	self assert: (self frameIsBlockActivation: self framePointer).
+	self assert: (self frameHasContext: self framePointer) not.
 
 	"The initial instructions in the block nil-out remaining temps."
 
@@ -2297,7 +2297,7 @@ StackInterpreter >> activateNewClosure: blockClosure outer: outerContext method:
 	self setMethod: theMethod.
 
 	"Now check for stack overflow or an event (interrupt, must scavenge, etc)"
-	stackPointer < stackLimit ifTrue:
+	self stackPointer < stackLimit ifTrue:
 		[self handleStackOverflowOrEventAllowContextSwitch: mayContextSwitch]
 ]
 
@@ -2309,8 +2309,8 @@ StackInterpreter >> activateNewFullClosure: blockClosure method: theMethod numAr
 	self assert: theMethod = (objectMemory fetchPointer: FullClosureCompiledBlockIndex ofObject: blockClosure).
 	numCopied := self copiedValueCountOfFullClosure: blockClosure.
 	self push: instructionPointer.
-	self push: framePointer.
-	framePointer := stackPointer.
+	self push: self framePointer.
+	self framePointer: self stackPointer.
 	self push: theMethod.
 	self push: (self encodeFrameFieldHasContext: false isBlock: true numArgs: numArgs).
 	self push: objectMemory nilObject. "FxThisContext field"
@@ -2324,8 +2324,8 @@ StackInterpreter >> activateNewFullClosure: blockClosure method: theMethod numAr
 					fetchPointer: i + FullClosureFirstCopiedValueIndex
 					ofObject: blockClosure)].
 
-	self assert: (self frameIsBlockActivation: framePointer).
-	self assert: (self frameHasContext: framePointer) not.
+	self assert: (self frameIsBlockActivation: self framePointer).
+	self assert: (self frameHasContext: self framePointer) not.
 
 	methodHeader := objectMemory methodHeaderOf: theMethod.
 	numTemps := self temporaryCountOfMethodHeader: methodHeader.
@@ -2337,7 +2337,7 @@ StackInterpreter >> activateNewFullClosure: blockClosure method: theMethod numAr
 	self setMethod: theMethod.
 
 	"Now check for stack overflow or an event (interrupt, must scavenge, etc)"
-	stackPointer < stackLimit ifTrue:
+	self stackPointer < stackLimit ifTrue:
 		[self handleStackOverflowOrEventAllowContextSwitch: mayContextSwitch]
 ]
 
@@ -2347,7 +2347,7 @@ StackInterpreter >> activateNewMethod [
 	methodHeader := self justActivateNewMethod: false. "either interpreted or machine code"
 
 	"Now check for stack overflow or an event (interrupt, must scavenge, etc)."
-	stackPointer < stackLimit ifTrue:
+	self stackPointer < stackLimit ifTrue:
 		[self handleStackOverflowOrEventAllowContextSwitch: (self canContextSwitchIfActivating: newMethod header: methodHeader)]
 ]
 
@@ -4412,8 +4412,8 @@ StackInterpreter >> checkForAndFollowForwardedPrimitiveState [
 					 scannedStackFrame ifFalse:
 						[scannedStackFrame := true.
 						 self
-							followForwardedFrameContents: framePointer
-							stackPointer: stackPointer + (argumentCount + 1 * objectMemory wordSize) "don't repeat effort"]].
+							followForwardedFrameContents: self framePointer
+							stackPointer: self stackPointer + (argumentCount + 1 * objectMemory wordSize) "don't repeat effort"]].
 				(accessorDepth > 0
 			 	 and: [(objectMemory hasPointerFields: oop)
 				 and: [objectMemory followForwardedObjectFields: oop toDepth: accessorDepth]]) ifTrue:
@@ -4568,7 +4568,7 @@ StackInterpreter >> checkForStackOverflow [
 	 against the real stack limit to find out if overflow has actually occurred."
 	<inline: true>
 	self externalWriteBackHeadFramePointers.
-	stackPointer < stackPage realStackLimit ifTrue:
+	self stackPointer < stackPage realStackLimit ifTrue:
 		[self handleStackOverflow]
 ]
 
@@ -4857,8 +4857,8 @@ StackInterpreter >> checkStackIntegrity [
 		(stackPages isFree: thePage) ifFalse:
 			[thePage = stackPage
 				ifTrue:
-					[theSP := stackPointer.
-					 theFP := framePointer]
+					[theSP := self stackPointer.
+					 theFP := self framePointer]
 				ifFalse:
 					[theSP := thePage headSP.
 					 theFP := thePage  headFP].
@@ -4915,7 +4915,7 @@ StackInterpreter >> checkStackPointerForMaybeMarriedContext: aContext [
 	 Answer the stackPointer of a Context."
 	| sp |
 	<inline: true>
-	(self checkIsStillMarriedContext: aContext currentFP: framePointer) ifTrue:
+	(self checkIsStillMarriedContext: aContext currentFP: self framePointer) ifTrue:
 		[sp := self checkStackPointerIndexForFrame: (self frameOfMarriedContext: aContext).
 		 self assert: ReceiverIndex + (objectMemory integerValueOf: sp) < (objectMemory lengthOf: aContext).
 		 ^sp].
@@ -4936,12 +4936,12 @@ StackInterpreter >> checkStackPointerIndexForFrame: theFP [
 	<var: #theFP type: #'char *'>
 	<var: #thePage type: #'StackPage *'>
 	<var: #theSP type: #'char *'>
-	theFP = framePointer ifTrue:
-		[^self stackPointerIndexForFrame: theFP WithSP: stackPointer].
+	theFP = self framePointer ifTrue:
+		[^self stackPointerIndexForFrame: theFP WithSP: self stackPointer].
 	thePage := stackPages stackPageFor: theFP.
 	theSP := self findSPOrNilOf: theFP
 				on: thePage
-				startingFrom: (thePage = stackPage ifTrue: [framePointer] ifFalse: [thePage headFP]).
+				startingFrom: (thePage = stackPage ifTrue: [self framePointer] ifFalse: [thePage headFP]).
 	theSP ifNil: [^-1].
 	^self stackPointerIndexForFrame: theFP WithSP: theSP
 ]
@@ -5772,8 +5772,8 @@ StackInterpreter >> divorceAllFrames [
 	stackPage ~= 0 ifTrue:
 		[self externalWriteBackHeadFramePointers].
 	activeContext := self
-						ensureFrameIsMarried: framePointer
-						SP: stackPointer + objectMemory wordSize.
+						ensureFrameIsMarried: self framePointer
+						SP: self stackPointer + objectMemory wordSize.
 	0 to: numStackPages - 1 do:
 		[:i| | aPage |
 		aPage := stackPages stackPageAt: i.
@@ -6110,8 +6110,8 @@ StackInterpreter >> enterSmalltalkExecutiveImplementation [
 	<inline: false>
 	"Setjmp for reentry into interpreter from elsewhere, e.g. FFI exception primitive failure."
 	self sigset: reenterInterpreter jmp: 0.
-	self setMethod: (self frameMethod: framePointer).
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer imbar: true line: #'__LINE__'.
+	self setMethod: (self frameMethod: self framePointer).
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer imbar: true line: #'__LINE__'.
 	self interpret.
 	^0
 ]
@@ -6724,7 +6724,7 @@ StackInterpreter >> externalSetStackPageAndPointersForSuspendedContextOfProcess:
 	newContext := objectMemory fetchPointer: SuspendedContextIndex ofObject: aProcess.
 	self assert: (objectMemory isContext: newContext).
 	(self isMarriedOrWidowedContext: newContext) ifTrue:
-		[self assert: (self checkIsStillMarriedContext: newContext currentFP: framePointer)].
+		[self assert: (self checkIsStillMarriedContext: newContext currentFP: self framePointer)].
 	objectMemory
 		storePointerUnchecked: SuspendedContextIndex
 		ofObject: aProcess
@@ -6746,18 +6746,18 @@ StackInterpreter >> externalSetStackPageAndPointersForSuspendedContextOfProcess:
 			 theFrame := thePage baseFP].
 	self setStackPageAndLimit: thePage.
 	self setStackPointersFromPage: thePage.
-	(self isMachineCodeFrame: framePointer) ifFalse:
-		[self setMethod: (self iframeMethod: framePointer)].
+	(self isMachineCodeFrame: self framePointer) ifFalse:
+		[self setMethod: (self iframeMethod: self framePointer)].
 	instructionPointer := self popStack.
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer
 ]
 
 { #category : #'stack pages' }
 StackInterpreter >> externalWriteBackHeadFramePointers [
-	self assert:  (framePointer - stackPointer) < (LargeContextSlots * objectMemory bytesPerOop).
+	self assert:  (self framePointer - self stackPointer) < (LargeContextSlots * objectMemory bytesPerOop).
 	self assert: stackPage = stackPages mostRecentlyUsedPage.
 	self deny: stackPage isFree.
-	self setHeadFP: framePointer andSP: stackPointer inPage: stackPage.
+	self setHeadFP: self framePointer andSP: self stackPointer inPage: stackPage.
 	self assert: stackPages pageListIsWellFormed
 ]
 
@@ -6766,8 +6766,8 @@ StackInterpreter >> externalizeFPandSP [
 	"Copy the frame and stack pointers to global variables for use in primitives and other functions outside the interpret loop."
 	self assert: (localSP < stackPage baseAddress
 				and: [localSP > (stackPage realStackLimit - (LargeContextSlots * objectMemory bytesPerOop))]).
-	stackPointer := localSP.
-	framePointer := localFP
+	self stackPointer: localSP.
+	self framePointer: localFP
 ]
 
 { #category : #utilities }
@@ -6775,8 +6775,8 @@ StackInterpreter >> externalizeIPandSP [
 	"Copy the local instruction, stack and frame pointers to global variables for use in primitives and other functions outside the interpret loop."
 
 	instructionPointer := self oopForPointer: localIP.
-	stackPointer := localSP.
-	framePointer := localFP
+	self stackPointer: localSP.
+	self framePointer: localFP
 ]
 
 { #category : #'primitive support' }
@@ -6846,8 +6846,8 @@ StackInterpreter >> fetchPointer: offset ofMarriedContext: aContext [
 	<var: #spouseFP type: #'char *'>
 
 	self assert: (objectMemory isContext: aContext).
-	self assert: (stackPage headFP = framePointer and: [stackPage headSP = stackPointer]).
-	self assert: (self checkIsStillMarriedContext: aContext currentFP: framePointer).
+	self assert: (stackPage headFP = self framePointer and: [stackPage headSP = self stackPointer]).
+	self assert: (self checkIsStillMarriedContext: aContext currentFP: self framePointer).
 
 	"method, closureOrNil & receiver need no special handling; only
 	 sender, pc & stackp have to be computed for married contexts."
@@ -6861,7 +6861,7 @@ StackInterpreter >> fetchPointer: offset ofMarriedContext: aContext [
 		 offset = StackPointerIndex ifTrue:
 			[^objectMemory integerObjectOf: (self stackPointerIndexForFrame: spouseFP)].
 		 offset = InstructionPointerIndex ifTrue:
-			[^self instructionPointerForFrame: spouseFP currentFP: framePointer currentIP: instructionPointer]].
+			[^self instructionPointerForFrame: spouseFP currentFP: self framePointer currentIP: instructionPointer]].
 	
 	spouseFP := self frameOfMarriedContext: aContext.
 	^(offset - ReceiverIndex between: 1 and: (self stackPointerIndexForFrame: spouseFP))
@@ -7209,10 +7209,10 @@ StackInterpreter >> findUnwindThroughContext: homeContext [
 	| onSamePage ctxtOrNilOrZero theMethod |
 	"Almost always (98%) the home is on the same page, in which case we know it will be found."
 	onSamePage := (self isStillMarriedContext: homeContext)
-					and: [(stackPages pageIndexFor: framePointer) = (stackPages pageIndexFor: (self frameOfMarriedContext: homeContext))].
+					and: [(stackPages pageIndexFor: self framePointer) = (stackPages pageIndexFor: (self frameOfMarriedContext: homeContext))].
 
 	"Since nothing changes we don't need to internalize."
-	ctxtOrNilOrZero := self findMethodWithPrimitive: 198 FromFP: framePointer UpToContext: homeContext.
+	ctxtOrNilOrZero := self findMethodWithPrimitive: 198 FromFP: self framePointer UpToContext: homeContext.
 	self deny: (onSamePage and: [ctxtOrNilOrZero = objectMemory nilObject]).
 
 	ctxtOrNilOrZero = 0 ifTrue:
@@ -7777,6 +7777,18 @@ StackInterpreter >> frameOfMarriedContext: aContext [
 	^self withoutSmallIntegerTags: senderOop
 ]
 
+{ #category : #'debug support' }
+StackInterpreter >> framePointer [
+	^framePointer
+]
+
+{ #category : #'cog jit support' }
+StackInterpreter >> framePointer: theFP [
+	"Simulation only"
+	<doNotGenerate>
+	framePointer := theFP
+]
+
 { #category : #'internal interpreter access' }
 StackInterpreter >> framePointerOfNativeArgument: offset in: theFP [
 	<inline: false>
@@ -8104,7 +8116,7 @@ StackInterpreter >> getStackPointer [
 	"For Alien FFI"
 	<api>
 	<returnTypeC: #'sqInt *'>
-	^self cCoerceSimple: stackPointer to: #'sqInt *'
+	^self cCoerceSimple: self stackPointer to: #'sqInt *'
 ]
 
 { #category : #'plugin support' }
@@ -8162,11 +8174,11 @@ StackInterpreter >> handleForwardedSendFaultForTag: classTag [
 	self assert: (objectMemory isOopForwarded: rcvr).
 	rcvr := objectMemory followForwarded: rcvr.
 	self stackValue: argumentCount put: rcvr.
-	self followForwardedFrameContents: framePointer
-		stackPointer: stackPointer + (argumentCount + 1 * objectMemory wordSize). "don't repeat effort"
-	(objectMemory isPointers: (self frameReceiver: framePointer)) ifTrue:
+	self followForwardedFrameContents: self framePointer
+		stackPointer: self stackPointer + (argumentCount + 1 * objectMemory wordSize). "don't repeat effort"
+	(objectMemory isPointers: (self frameReceiver: self framePointer)) ifTrue:
 		[objectMemory
-			followForwardedObjectFields: (self frameReceiver: framePointer)
+			followForwardedObjectFields: (self frameReceiver: self framePointer)
 			toDepth: 0].
 	^objectMemory fetchClassTagOf: rcvr
 ]
@@ -8208,7 +8220,7 @@ StackInterpreter >> handleStackOverflow [
 	<var: #callerFP type: #'char *'>
 	<var: #overflowLimitAddress type: #'char *'>
 
-	self assert: stackPointer < stackPage realStackLimit.
+	self assert: self stackPointer < stackPage realStackLimit.
 
 	self maybeTraceStackOverflow.
 	statStackOverflow := statStackOverflow + 1.
@@ -8219,7 +8231,7 @@ StackInterpreter >> handleStackOverflow [
 	 more than one frame.  The idea is to record which page has overflowed, and the first
 	 time it overflows move one frame, the second time two frames, and so on.  We move no
 	 more frames than would leave the page half occupied."
-	theFP := framePointer.
+	theFP := self framePointer.
 	stackPage = overflowedPage
 		ifTrue:
 			[overflowLimitAddress := stackPage baseAddress - stackPages overflowLimit.
@@ -8239,15 +8251,15 @@ StackInterpreter >> handleStackOverflow [
 	self setStackPointersFromPage: newPage.
 	self isCog
 		ifFalse: "To overflow the stack this must be a new frame, but in Cog base frames are married."
-			[self assert: (self frameHasContext: framePointer) not.
+			[self assert: (self frameHasContext: self framePointer) not.
 			 self assert: (self validInstructionPointer: instructionPointer + 1
 							inMethod: method
-							framePointer: framePointer)]
+							framePointer: self framePointer)]
 		ifTrue:
 			[self assert: (self validInstructionPointer: instructionPointer + 1
-							inFrame: framePointer).
-			 self assert: ((self frameHasContext: framePointer) not
-						or: [objectMemory isContext: (self frameContext: framePointer)])]
+							inFrame: self framePointer).
+			 self assert: ((self frameHasContext: self framePointer) not
+						or: [objectMemory isContext: (self frameContext: self framePointer)])]
 ]
 
 { #category : #'message sending' }
@@ -8349,11 +8361,11 @@ StackInterpreter >> ifCurrentStackPageHasValidHeadPointers: thePage [
 	 answer if thePage's heapSP and headFP are equal to the stackPointer and framePointer respectively."
 	<var: #thePage type: #'StackPage *'>
 	thePage = stackPage ifTrue:
-		[(thePage addressIsInPage: framePointer) ifTrue:
-			[thePage headFP ~= framePointer ifTrue:
+		[(thePage addressIsInPage: self framePointer) ifTrue:
+			[thePage headFP ~= self framePointer ifTrue:
 				[^false]].
-		(thePage addressIsInPage: stackPointer) ifTrue:
-			[thePage headSP ~= stackPointer ifTrue:
+		(thePage addressIsInPage: self stackPointer) ifTrue:
+			[thePage headSP ~= self stackPointer ifTrue:
 				[^false]]].
 	^true
 ]
@@ -9369,8 +9381,8 @@ StackInterpreter >> internalizeIPandSP [
 	"Copy the instruction, stack and frame pointers to local variables for rapid access within the interpret loop."
 
 	localIP := self pointerForOop: instructionPointer.
-	localSP := self pointerForOop: stackPointer.
-	localFP := self pointerForOop: framePointer.
+	localSP := self pointerForOop: self stackPointer.
+	localFP := self pointerForOop: self framePointer.
 	LowcodeVM ifTrue: [ nativeSP := 0. ]
 ]
 
@@ -10058,8 +10070,8 @@ StackInterpreter >> justActivateNewMethod: mustBeInterpreterFrame [
 	self assert: (objectMemory isOopForwarded: rcvr) not.
 
 	self push: instructionPointer.
-	self push: framePointer.
-	framePointer := stackPointer.
+	self push: self framePointer.
+	self framePointer: self stackPointer.
 	self push: newMethod.
 	self setMethod: newMethod methodHeader: methodHeader.
 	self push: (self encodeFrameFieldHasContext: false isBlock: false numArgs: numArgs).
@@ -10077,7 +10089,7 @@ StackInterpreter >> justActivateNewMethod: mustBeInterpreterFrame [
 		  with a long store temp.  Strictly no need to skip the store because it's effectively a noop."
 		 instructionPointer := instructionPointer + (self sizeOfCallPrimitiveBytecode: methodHeader).
 		 primFailCode ~= 0 ifTrue:
-			[self reapAndResetErrorCodeTo: stackPointer header: methodHeader]].
+			[self reapAndResetErrorCodeTo: self stackPointer header: methodHeader]].
 
 	^methodHeader
 ]
@@ -10165,7 +10177,7 @@ StackInterpreter >> long: aJumpBuf jmp: returnValue [
 	 Signal the exception that simulates a longjmp back to the interpreter." 
 	<doNotGenerate>
 	aJumpBuf == reenterInterpreter ifTrue:
-		[self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer imbar: true line: nil].
+		[self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer imbar: true line: nil].
 	aJumpBuf returnValue: returnValue; signal
 ]
 
@@ -16234,8 +16246,8 @@ StackInterpreter >> marriedContext: spouseContext pointsTo: anOop stackDeltaForC
 	<var: #theSP type: #'char *'>
 	<var: #rcvrOffset type: #'char *'>
 	theFP := self frameOfMarriedContext: spouseContext.
-	theFP = framePointer
-		ifTrue: [theSP := stackPointer + (stackDeltaForCurrentFrame * objectMemory wordSize)]
+	theFP = self framePointer
+		ifTrue: [theSP := self stackPointer + (stackDeltaForCurrentFrame * objectMemory wordSize)]
 		ifFalse:
 			[thePage := stackPages stackPageFor: theFP.
 			theSP := self findSPOf: theFP on: thePage].
@@ -17191,7 +17203,7 @@ StackInterpreter >> pop2AndPushIntegerIfOK: integerResult [
 StackInterpreter >> pop: nItems [
 	<inline: true>
 	"In the StackInterpreter stacks grow down."
-	stackPointer := stackPointer + (nItems*objectMemory wordSize).
+	self stackPointer: self stackPointer + (nItems*objectMemory wordSize).
 	^nil
 ]
 
@@ -17201,8 +17213,8 @@ StackInterpreter >> pop: nItems thenPush: oop [
 	| sp |
 	<inline: true>
 	<var: #sp type: #'char *'>
-	stackPages longAt: (sp := stackPointer + ((nItems - 1) * objectMemory wordSize)) put: oop.
-	stackPointer := sp
+	stackPages longAt: (sp := self stackPointer + ((nItems - 1) * objectMemory wordSize)) put: oop.
+	self stackPointer: sp
 ]
 
 { #category : #'internal interpreter access' }
@@ -17212,9 +17224,9 @@ StackInterpreter >> pop: nItems thenPushBool: trueOrFalse [
 	<inline: true>
 	<var: #sp type: #'char *'>
 	stackPages
-		longAt: (sp := stackPointer + ((nItems - 1) * objectMemory wordSize))
+		longAt: (sp := self stackPointer + ((nItems - 1) * objectMemory wordSize))
 		put: (objectMemory booleanObjectOf: trueOrFalse).
-	stackPointer := sp
+	self stackPointer: sp
 ]
 
 { #category : #'internal interpreter access' }
@@ -17225,9 +17237,9 @@ StackInterpreter >> pop: nItems thenPushFloat: f [
 	<var: #f type: #double>
 	<var: #sp type: #'char *'>
 	stackPages
-		longAt: (sp := stackPointer + ((nItems - 1) * objectMemory wordSize))
+		longAt: (sp := self stackPointer + ((nItems - 1) * objectMemory wordSize))
 		put: (objectMemory floatObjectOf: f).
-	stackPointer := sp
+	self stackPointer: sp
 ]
 
 { #category : #'internal interpreter access' }
@@ -17237,9 +17249,9 @@ StackInterpreter >> pop: nItems thenPushInteger: integerVal [
 	| sp |
 	<var: #sp type: #'char *'>
 	stackPages
-		longAt: (sp := stackPointer + ((nItems - 1) * objectMemory wordSize))
+		longAt: (sp := self stackPointer + ((nItems - 1) * objectMemory wordSize))
 		put: (objectMemory integerObjectOf: integerVal).
-	stackPointer := sp
+	self stackPointer: sp
 ]
 
 { #category : #'primitive support' }
@@ -17263,8 +17275,8 @@ StackInterpreter >> popStack [
 	<api>
 	| top |
 	<inline: true>
-	top := stackPages longAt: stackPointer.
-	stackPointer := stackPointer + objectMemory wordSize.
+	top := stackPages longAt: self stackPointer.
+	self stackPointer: self stackPointer + objectMemory wordSize.
 	^top
 ]
 
@@ -17638,8 +17650,8 @@ StackInterpreter >> primitiveObject: actualReceiver perform: selector withArgume
 	argumentCount * objectMemory wordSize to: 0 by: objectMemory wordSize negated do:
 		[:offset|
 		stackPages
-			longAt: stackPointer + offset + delta
-			put: (stackPages longAt: stackPointer + offset)].
+			longAt: self stackPointer + offset + delta
+			put: (stackPages longAt: self stackPointer + offset)].
 	self pop: performArgCount + 2.
 	self executeNewMethod.
 	self initPrimCall.  "Recursive xeq affects primErrorCode"
@@ -17735,7 +17747,7 @@ StackInterpreter >> printAllStacks [
 	proc := self activeProcess.
 	self printNameOfClass: (objectMemory fetchClassOf: proc) count: 5; space; printHex: proc.
 	self print: ' priority '; printNum: (self quickFetchInteger: PriorityIndex ofObject: proc); cr.
-	self printCallStackFP: framePointer. "first the current activation"
+	self printCallStackFP: self framePointer. "first the current activation"
 	schedLists := objectMemory fetchPointer: ProcessListsIndex ofObject: self schedulerPointer.
 	"then the runnable processes"
 	p := highestRunnableProcessPriority = 0
@@ -17789,9 +17801,9 @@ StackInterpreter >> printCallStack [
 	<inline: false>
 	
 	self resetStackPrintedCount.
-	framePointer = nil
+	self framePointer = nil
 		ifTrue: [self printCallStackOf: (objectMemory fetchPointer: SuspendedContextIndex ofObject: self activeProcess)]
-		ifFalse: [self printCallStackFP: framePointer]
+		ifFalse: [self printCallStackFP: self framePointer]
 ]
 
 { #category : #'debug printing' }
@@ -17805,7 +17817,7 @@ StackInterpreter >> printCallStackFP: theFP [
 	[context = objectMemory nilObject] whileFalse:
 		[(self isMarriedOrWidowedContext: context)
 			ifTrue:
-				[(self checkIsStillMarriedContext: context currentFP: framePointer) ifFalse:
+				[(self checkIsStillMarriedContext: context currentFP: self framePointer) ifFalse:
 					[self shortPrintContext: context.
 					 ^nil].
 				 context := self shortReversePrintFrameAndCallers: (self frameOfMarriedContext: context)]
@@ -17831,7 +17843,7 @@ StackInterpreter >> printCallStackOf: aContextOrProcessOrFrame [
 	[context = objectMemory nilObject] whileFalse:
 		[(self isMarriedOrWidowedContext: context)
 			ifTrue:
-				[(self checkIsStillMarriedContext: context currentFP: framePointer) ifFalse:
+				[(self checkIsStillMarriedContext: context currentFP: self framePointer) ifFalse:
 					[self shortPrintContext: context.
 					 ^nil].
 				 context := self shortReversePrintFrameAndCallers: (self frameOfMarriedContext: context)]
@@ -17887,7 +17899,7 @@ StackInterpreter >> printContext: aContext [
 	ip := objectMemory fetchPointer: InstructionPointerIndex ofObject: aContext.
 	(objectMemory isIntegerObject: sender)
 		ifTrue:
-			[(self checkIsStillMarriedContext: aContext currentFP: framePointer)
+			[(self checkIsStillMarriedContext: aContext currentFP: self framePointer)
 				ifTrue: [self print: 'married (assuming framePointer valid)'; cr]
 				ifFalse: [self print: 'widowed (assuming framePointer valid)'; cr].
 			self print: 'sender   '; printNum: sender; print: ' (';
@@ -17951,7 +17963,7 @@ StackInterpreter >> printDecodeMethodHeaderOop: methodHeaderOop [
 { #category : #'debug printing' }
 StackInterpreter >> printExternalHeadFrame [
 	<inline: false>
-	self printFrame: framePointer WithSP: stackPointer
+	self printFrame: self framePointer WithSP: self stackPointer
 ]
 
 { #category : #'debug printing' }
@@ -17973,13 +17985,13 @@ StackInterpreter >> printFrame: theFP [
 		[((objectMemory addressCouldBeObj: theFP asInteger)
 		  and: [(objectMemory isInMemory: theFP asInteger)
 		  and: [(objectMemory isContextNonImm: theFP asInteger)
-		  and: [(self checkIsStillMarriedContext: theFP asInteger currentFP: framePointer)]]]) ifTrue:
+		  and: [(self checkIsStillMarriedContext: theFP asInteger currentFP: self framePointer)]]]) ifTrue:
 			[^self printFrame: (self frameOfMarriedContext: theFP asInteger)].
 		self printHexPtr: theFP; print: ' is not in the stack zone?!'; cr.
 		 ^nil].
 	frameAbove := nil.
-	theFP = framePointer
-		ifTrue: [theSP := stackPointer]
+	theFP = self framePointer
+		ifTrue: [theSP := self stackPointer]
 		ifFalse:
 			[thePage := stackPages stackPageFor: theFP.
 			 (stackPages isFree: thePage) ifTrue:
@@ -17992,10 +18004,10 @@ StackInterpreter >> printFrame: theFP [
 					[frameAbove := self safeFindFrameAbove: theFP
 										on: thePage
 										startingFrom: ((thePage = stackPage
-														and: [framePointer
+														and: [self framePointer
 																between: thePage realStackLimit
 																and: thePage baseAddress])
-														ifTrue: [framePointer]
+														ifTrue: [self framePointer]
 														ifFalse: [thePage headFP]).
 					 theSP := frameAbove ifNotNil:
 								[self frameCallerSP: frameAbove]]].
@@ -18579,7 +18591,7 @@ StackInterpreter >> printProcessStack: aProcess [
 	self print: ' priority '; printNum: (self quickFetchInteger: PriorityIndex ofObject: aProcess); cr.
 	ctx := objectMemory followField: SuspendedContextIndex ofObject: aProcess.
 	ctx = objectMemory nilObject ifFalse:
-		[self printCallStackOf: ctx currentFP: framePointer]
+		[self printCallStackOf: ctx currentFP: self framePointer]
 ]
 
 { #category : #'debug printing' }
@@ -18604,7 +18616,7 @@ StackInterpreter >> printSends [
 { #category : #'debug printing' }
 StackInterpreter >> printStackCallStack [
 	<doNotGenerate>
-	self printStackCallStackOf: (localFP ifNil: [framePointer])
+	self printStackCallStackOf: (localFP ifNil: [self framePointer])
 ]
 
 { #category : #'debug printing' }
@@ -18803,8 +18815,8 @@ StackInterpreter >> push: object [
 	| sp |
 	<inline: true>
 	<var: #sp type: #'char *'>
-	stackPages longAt: (sp := stackPointer - objectMemory wordSize) put: object.
-	stackPointer := sp
+	stackPages longAt: (sp := self stackPointer - objectMemory wordSize) put: object.
+	self stackPointer: sp
 ]
 
 { #category : #'stack bytecodes' }
@@ -19236,7 +19248,7 @@ StackInterpreter >> putToSleep: aProcess yieldingIf: yieldImplicitly [
 	 adding to the back if yieldImplicitly or to the front if not yieldImplicitly."
 
 	| priority processLists processList |
-	self assert: (framePointer - stackPointer) < (LargeContextSlots * objectMemory bytesPerOop).
+	self assert: (self framePointer - self stackPointer) < (LargeContextSlots * objectMemory bytesPerOop).
 	priority := self quickFetchInteger: PriorityIndex ofObject: aProcess.
 	(highestRunnableProcessPriority ~= 0
 	 and: [priority > highestRunnableProcessPriority]) ifTrue:
@@ -19497,14 +19509,14 @@ StackInterpreter >> reestablishContextPriorToCallback: callbackContext [
 		ifTrue: [self markContextAsDead: callbackContext]
 		ifFalse:
 			[theFP := self frameOfMarriedContext: callbackContext.
-			 framePointer = theFP "common case"
+			 self framePointer = theFP "common case"
 				ifTrue:
 					[(self isBaseFrame: theFP)
 						ifTrue: [stackPages freeStackPage: stackPage]
 						ifFalse: "calloutContext is immediately below on the same page.  Make it current."
-							[instructionPointer := (self frameCallerSavedIP: framePointer) asUnsignedInteger.
-							 stackPointer := framePointer + (self frameStackedReceiverOffset: framePointer) + objectMemory wordSize.
-							 framePointer := self frameCallerFP: framePointer.
+							[instructionPointer := (self frameCallerSavedIP: self framePointer) asUnsignedInteger.
+							 self stackPointer: self framePointer + (self frameStackedReceiverOffset: self framePointer) + objectMemory wordSize.
+							 self framePointer: (self frameCallerFP: self framePointer).
 							 ^true]]
 				ifFalse:
 					[self externalDivorceFrame: theFP andContext: callbackContext.
@@ -19518,9 +19530,9 @@ StackInterpreter >> reestablishContextPriorToCallback: callbackContext [
 			 "findSPOf:on: points to the word beneath the instructionPointer, but
 			  there is no instructionPointer on the top frame of the current page."
 			 self assert: thePage ~= stackPage.
-			 stackPointer := (self findSPOf: theFP on: thePage) - objectMemory wordSize.
-			 framePointer := theFP.
-			 self assert: stackPointer < framePointer]
+			 self stackPointer: (self findSPOf: theFP on: thePage) - objectMemory wordSize.
+			 self framePointer: theFP.
+			 self assert: self stackPointer < self framePointer]
 		ifFalse:
 			[thePage := self makeBaseFrameFor: calloutContext.
 			 self setStackPointersFromPage: thePage].
@@ -19778,17 +19790,17 @@ StackInterpreter >> returnAs: returnTypeOop ThroughCallback: vmCallbackContext C
 			[self assert: (debugCallbackPath := debugCallbackPath bitOr: 8) > 0.
 		 	 theFP := self frameOfMarriedContext: callbackMethodContext.
 			 self assert: (self frameReceiver: theFP) = (objectMemory splObj: ClassAlien).
-			 framePointer = theFP "common case"
+			 self framePointer = theFP "common case"
 				ifTrue:
 					[self assert: (debugCallbackPath := debugCallbackPath bitOr: 16) > 0.
 		 			 (self isBaseFrame: theFP) ifFalse: "calloutMethodContext is immediately below on the same page.  Make it current."
 						[self assert: (debugCallbackPath := debugCallbackPath bitOr: 32) > 0.
 		 				 instructionPointer := (self frameCallerSavedIP: theFP) asUnsignedInteger.
-						 stackPointer := theFP + (self frameStackedReceiverOffset: theFP) + objectMemory wordSize.
-						 framePointer := self frameCallerFP: theFP.
-						 self setMethod: (self frameMethodObject: framePointer).
+						 self stackPointer: theFP + (self frameStackedReceiverOffset: theFP) + objectMemory wordSize.
+						 self framePointer: (self frameCallerFP: theFP).
+						 self setMethod: (self frameMethodObject: self framePointer).
 						 self restoreCStackStateForCallbackContext: vmCallbackContext.
-						 self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer.
+						 self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer.
 						 "N.B. siglongjmp is defines as _longjmp on non-win32 platforms.
 						  This matches the use of _setjmp in ia32abicc.c."
 						 self siglong: vmCallbackContext trampoline jmp: (self integerValueOf: returnTypeOop).
@@ -19808,11 +19820,11 @@ StackInterpreter >> returnAs: returnTypeOop ThroughCallback: vmCallbackContext C
 			 "findSPOf:on: points to the word beneath the instructionPointer, but
 			  there is no instructionPointer on the top frame of the current page."
 			 self assert: thePage ~= stackPage.
-			 stackPointer := thePage headFP = theFP
+			 self stackPointer: (thePage headFP = theFP
 								ifTrue: [thePage headSP]
-								ifFalse: [(self findSPOf: theFP on: thePage) - objectMemory wordSize].
-			 framePointer := theFP.
-			 self assert: stackPointer < framePointer]
+								ifFalse: [(self findSPOf: theFP on: thePage) - objectMemory wordSize]).
+			 self framePointer: theFP.
+			 self assert: self stackPointer < self framePointer]
 		ifFalse:
 			[self assert: (debugCallbackPath := debugCallbackPath bitOr: 256) > 0.
 		 	 thePage := self makeBaseFrameFor: calloutMethodContext.
@@ -19931,7 +19943,7 @@ StackInterpreter >> roomToPushNArgs: n [
 	false
 		ifTrue: "old code that checked size of context..."
 			[| cntxSize |
-			 self assert: method = (stackPages longAt: framePointer + FoxMethod).
+			 self assert: method = (stackPages longAt: self framePointer + FoxMethod).
 			 cntxSize := (self methodHeaderIndicatesLargeFrame: (objectMemory methodHeaderOf: method))
 							ifTrue: [LargeContextSlots - CtxtTempFrameStart]
 							ifFalse: [SmallContextSlots - CtxtTempFrameStart].
@@ -20106,7 +20118,7 @@ StackInterpreter >> sendInvokeCallback: thunkPtr Stack: stackPtr Registers: regs
 	self push: (self positiveMachineIntegerFor: jmpBufPtr).
 	self ifAppropriateCompileToNativeCode: newMethod selector: messageSelector.
 	self justActivateNewMethod: false. "either interpreted or machine code"
-	(self isMachineCodeFrame: framePointer) ifFalse:
+	(self isMachineCodeFrame: self framePointer) ifFalse:
 		[self maybeFlagMethodAsInterpreted: newMethod].
 	self checkForStackOverflow.
 	self enterSmalltalkExecutiveFromCallback.
@@ -20152,10 +20164,10 @@ StackInterpreter >> sendInvokeCallbackContext: vmCallbackContext [
 	self push: (self positiveMachineIntegerFor: vmCallbackContext asUnsignedInteger).
 	self ifAppropriateCompileToNativeCode: newMethod selector: messageSelector.
 	self justActivateNewMethod: false. "either interpreted or machine code"
-	(self isMachineCodeFrame: framePointer) ifFalse:
+	(self isMachineCodeFrame: self ) ifFalse:
 		[self maybeFlagMethodAsInterpreted: newMethod].
 	self checkForStackOverflow.
-	self assert: (self frameReceiver: framePointer) = (objectMemory splObj: ClassAlien).
+	self assert: (self frameReceiver: self framePointer) = (objectMemory splObj: ClassAlien).
 	self enterSmalltalkExecutiveFromCallback.
 	"not reached"
 	^true
@@ -20441,8 +20453,8 @@ StackInterpreter >> setStackPageAndLimit: thePage [
 StackInterpreter >> setStackPointersFromPage: thePage [
 	<var: #thePage type: #'StackPage *'>
 	<inline: true>
-	stackPointer := thePage headSP.
-	framePointer := thePage headFP
+	self stackPointer: thePage headSP.
+	self framePointer: thePage headFP
 ]
 
 { #category : #'object memory support' }
@@ -20609,7 +20621,7 @@ StackInterpreter >> shortPrintContext: aContext [
 	
 	self printHex: aContext.
 	(self isMarriedOrWidowedContext: aContext)
-		ifTrue: [(self checkIsStillMarriedContext: aContext currentFP: framePointer)
+		ifTrue: [(self checkIsStillMarriedContext: aContext currentFP: self framePointer)
 					ifTrue:
 						[theFP := self frameOfMarriedContext: aContext.
 						(self isMachineCodeFrame: theFP)
@@ -21066,8 +21078,8 @@ StackInterpreter >> slowPrimitiveResponse [
 	self assert: objectMemory remapBufferCount = 0.
 	FailImbalancedPrimitives ifTrue:
 		[nArgs := argumentCount.
-		 savedStackPointer := stackPointer.
-		 savedFramePointer := framePointer].
+		 savedStackPointer := self stackPointer.
+		 savedFramePointer := self framePointer].
 	self initPrimCall.
 	self dispatchFunctionPointer: primitiveFunctionPointer.
 	self assert: (self maybeLeakCheckExternalPrimCall: newMethod).
@@ -21075,14 +21087,14 @@ StackInterpreter >> slowPrimitiveResponse [
 	self maybeFailForLastObjectOverwrite.
 	(FailImbalancedPrimitives
 	and: [self successful
-	and: [framePointer = savedFramePointer
-	and: [(self isMachineCodeFrame: framePointer) not]]]) ifTrue:"Don't fail if primitive has done something radical, e.g. perform:"
-		[stackPointer ~= (savedStackPointer + (nArgs * objectMemory wordSize)) ifTrue:
+	and: [self framePointer = savedFramePointer
+	and: [(self isMachineCodeFrame: self framePointer) not]]]) ifTrue:"Don't fail if primitive has done something radical, e.g. perform:"
+		[self stackPointer ~= (savedStackPointer + (nArgs * objectMemory wordSize)) ifTrue:
 			[self flag: 'Would be nice to make this a message send of e.g. unbalancedPrimitive to the current process or context'.
 			 "This is necessary but insufficient; the result may still have been written to the stack.
 			   At least we'll know something is wrong."
 			 self failUnbalancedPrimitive.
-			 stackPointer := savedStackPointer]].
+			 self stackPointer: savedStackPointer]].
 	"If we are profiling, take accurate primitive measures"
 	nextProfileTick > 0 ifTrue:
 		[self checkProfileTick: newMethod].
@@ -21274,14 +21286,14 @@ StackInterpreter >> stSizeOf: oop [
 StackInterpreter >> stackFloatValue: offset [
 	"In the StackInterpreter stacks grow down."
 	<returnTypeC: #double>
-	^objectMemory floatValueOf: (stackPages longAt: stackPointer + (offset*objectMemory wordSize))
+	^objectMemory floatValueOf: (stackPages longAt: self stackPointer + (offset*objectMemory wordSize))
 ]
 
 { #category : #'stack access' }
 StackInterpreter >> stackIntegerValue: offset [
 	"In the StackInterpreter stacks grow down."
 	| integerPointer |
-	integerPointer := stackPages longAt: stackPointer + (offset*objectMemory wordSize).
+	integerPointer := stackPages longAt: self stackPointer + (offset*objectMemory wordSize).
 	^self checkedIntegerValueOf: integerPointer
 ]
 
@@ -21322,7 +21334,7 @@ StackInterpreter >> stackObjectValue: offset [
 	"Ensures that the given object is a real object, not a SmallInteger."
 	"In the StackInterpreter stacks grow down."
 	| oop |
-	oop := stackPages longAt: stackPointer + (offset * objectMemory wordSize).
+	oop := stackPages longAt: self stackPointer + (offset * objectMemory wordSize).
 	(objectMemory isImmediate: oop) ifTrue:
 		[self primitiveFail. ^ nil].
 	^oop
@@ -21382,10 +21394,13 @@ StackInterpreter >> stackPagesClass [
 		ifFalse: [InterpreterStackPagesLSB]
 ]
 
+{ #category : #'debug support' }
+StackInterpreter >> stackPointer [
+	^stackPointer
+]
+
 { #category : #'cog jit support' }
 StackInterpreter >> stackPointer: theSP [
-	"Simulation only"
-	<doNotGenerate>
 	stackPointer := theSP
 ]
 
@@ -21405,7 +21420,7 @@ StackInterpreter >> stackPointerForMaybeMarriedContext: aContext [
 StackInterpreter >> stackPointerIndex [
 	"Return the 1-based value of the stack pointer for the current frame.
 	 This is what the value of the stackp slot would be in a context object."
-	^self stackPointerIndexForFrame: framePointer WithSP: stackPointer
+	^self stackPointerIndexForFrame: self framePointer WithSP: self stackPointer
 ]
 
 { #category : #'frame access' }
@@ -21436,7 +21451,7 @@ StackInterpreter >> stackPositiveMachineIntegerValue: offset [
 	<returnTypeC: #'usqIntptr_t'>
 	"In the StackInterpreter stacks grow down."
 	| integerPointer |
-	integerPointer := stackPages longAt: stackPointer + (offset*objectMemory wordSize).
+	integerPointer := stackPages longAt: self stackPointer + (offset*objectMemory wordSize).
 	^self positiveMachineIntegerValueOf: integerPointer
 ]
 
@@ -21446,34 +21461,34 @@ StackInterpreter >> stackSignedMachineIntegerValue: offset [
 	<returnTypeC: #'sqIntptr_t'>
 	"In the StackInterpreter stacks grow down."
 	| integerPointer |
-	integerPointer := stackPages longAt: stackPointer + (offset*objectMemory wordSize).
+	integerPointer := stackPages longAt: self stackPointer + (offset*objectMemory wordSize).
 	^self signedMachineIntegerValueOf: integerPointer
 ]
 
 { #category : #'stack access' }
 StackInterpreter >> stackTop [
 	<api>
-	^stackPages longAt: stackPointer
+	^stackPages longAt: self stackPointer
 ]
 
 { #category : #'stack access' }
 StackInterpreter >> stackTopPut: aValue [
 
-	^stackPages longAtPointer: stackPointer put: aValue
+	^stackPages longAtPointer: self stackPointer put: aValue
 ]
 
 { #category : #'stack access' }
 StackInterpreter >> stackValue: offset [
 	<api>
 	"In the StackInterpreter stacks grow down."
-	^stackPages longAt: stackPointer + (offset*objectMemory wordSize)
+	^stackPages longAt: self stackPointer + (offset*objectMemory wordSize)
 ]
 
 { #category : #'stack access' }
 StackInterpreter >> stackValue: offset put: oop [
 	"In the StackInterpreter stacks grow down."
 	^stackPages
-		longAt: stackPointer + (offset*objectMemory wordSize)
+		longAt: self stackPointer + (offset*objectMemory wordSize)
 		put: oop
 ]
 
@@ -21877,10 +21892,10 @@ StackInterpreter >> transferTo: newProc [
 	statProcessSwitch := statProcessSwitch + 1.
 	self push: instructionPointer.
 	self externalWriteBackHeadFramePointers.
-	self assertValidExecutionPointe: instructionPointer + 1 r: framePointer s: stackPointer.
+	self assertValidExecutionPointe: instructionPointer + 1 r: self framePointer s: self stackPointer.
 	sched := self schedulerPointer.
 	oldProc := objectMemory fetchPointer: ActiveProcessIndex ofObject: sched.
-	activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer + objectMemory wordSize.
+	activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer + objectMemory wordSize.
 	objectMemory storePointer: SuspendedContextIndex ofObject: oldProc withValue: activeContext.
 	objectMemory storePointer: ActiveProcessIndex ofObject: sched withValue: newProc.
 	objectMemory storePointerUnchecked: MyListIndex ofObject: newProc withValue: objectMemory nilObject.
@@ -22073,7 +22088,7 @@ StackInterpreter >> ultimateLiteralOf: aMethodOop [
 { #category : #'internal interpreter access' }
 StackInterpreter >> unPop: nItems [
 	"In the StackInterpreter stacks grow down."
-	stackPointer := stackPointer - (nItems*objectMemory wordSize)
+	self stackPointer: self stackPointer - (nItems*objectMemory wordSize)
 ]
 
 { #category : #'sista inline primitives - unary' }
@@ -22756,7 +22771,7 @@ StackInterpreter >> zeroStackPage [
 	 Frame pointers should have been written back already."
 	<inline: true>
 	self assert: (stackPage = 0
-				or: [stackPage headFP = framePointer
-					and: [stackPage headSP = stackPointer]]).
+				or: [stackPage headFP = self framePointer
+					and: [stackPage headSP = self stackPointer]]).
 	stackPage := 0
 ]

@@ -672,11 +672,6 @@ StackInterpreterSimulator >> frameOfMarriedContext: aContext [
 	^self withoutSmallIntegerTags: senderOop
 ]
 
-{ #category : #'spur bootstrap' }
-StackInterpreterSimulator >> framePointer [
-	^framePointer
-]
-
 { #category : #'I/O primitives' }
 StackInterpreterSimulator >> fullDisplay [
 	| primFailCodeValue |
@@ -1278,7 +1273,7 @@ StackInterpreterSimulator >> isWidowedContext: aOnceMarriedContext [
 	"See if the argument is connected with a live frame or not.
 	 If it is not, turn it into a bereaved single context."
 	(stackPages isFree: stackPage) ifFalse: "in baseReturn the active page has been freed."
-		[((stackPages somePageHasHeadFrameFP: framePointer)
+		[((stackPages somePageHasHeadFrameFP: self framePointer)
 		  or: [(stackPages somePageHasHeadFrameFP: localFP)
 		  or: [stackPages allPagesFree]]) ifFalse:
 			[thisContext sender sender method = (StackInterpreter >> #baseFrameReturn) ifFalse:
@@ -2020,7 +2015,7 @@ StackInterpreterSimulator >> printCurrentBytecodeOn: aStream [
 
 { #category : #'debug printing' }
 StackInterpreterSimulator >> printECS [
-	self printCallStackFP: framePointer
+	self printCallStackFP: self framePointer
 ]
 
 { #category : #'debug printing' }
@@ -2694,9 +2689,9 @@ StackInterpreterSimulator >> utilitiesMenu: aMenuMorph [
 		addLine;
 		add: 'print ext head frame' action: #printExternalHeadFrame;
 		add: 'print int head frame' action: #printHeadFrame;
-		add: 'short print ext frame & callers' action: [self shortPrintFrameAndCallers: framePointer];
+		add: 'short print ext frame & callers' action: [self shortPrintFrameAndCallers: self framePointer];
 		add: 'short print int frame & callers' action: [self shortPrintFrameAndCallers: localFP];
-		add: 'long print ext frame & callers' action: [self printFrameAndCallers: framePointer SP: stackPointer];
+		add: 'long print ext frame & callers' action: [self printFrameAndCallers: self framePointer SP: self stackPointer];
 		add: 'long print int frame & callers' action: [self printFrameAndCallers: localFP SP: localSP];
 		add: 'print frame...' action: [(self promptHex: 'print frame') ifNotNil: [:fp| self printFrame: fp]];
 		add: 'print call stack' action: #printCallStack;
@@ -2705,7 +2700,7 @@ StackInterpreterSimulator >> utilitiesMenu: aMenuMorph [
 		add: 'print call stack of...' action: [(self promptHex: 'context or process oop') ifNotNil: [:obj| self printCallStackOf: obj]];
 		add: 'print call stack of frame...' action: [(self promptHex: 'frame') ifNotNil: [:fp| self printCallStackFP: fp]];
 		add: 'print all stacks' action: #printAllStacks;
-		add: 'write back local ptrs' action: [stackPointer := localSP. framePointer := localFP. instructionPointer := localIP.
+		add: 'write back local ptrs' action: [self stackPointer: localSP. self framePointer: localFP. instructionPointer := localIP.
 											self writeBackHeadFramePointers];
 		add: 'print prim trace log' action: #dumpPrimTraceLog;
 		addLine;

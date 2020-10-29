@@ -265,12 +265,12 @@ CoInterpreterMT >> cedeToHigherPriorityThreads [
 
 	self assert: vmThread priority > activePriority.
 	self assert: vmThread ~= cogThreadManager currentVMThread.
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer.
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer.
 
 	maxWaitingPriority > vmThread priority ifTrue:
 		[maxWaitingPriority := vmThread priority].
 	statProcessSwitch := statProcessSwitch + 1.
-	activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer.
+	activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer.
 	objectMemory storePointer: SuspendedContextIndex ofObject: activeProc withValue: activeContext.
 	self ensurePushedInstructionPointer.
 	self externalWriteBackHeadFramePointers.
@@ -616,13 +616,13 @@ CoInterpreterMT >> enterSmalltalkExecutiveImplementation [
 	"Setjmp for reentry into interpreter from elsewhere, e.g. machine-code trampolines."
 	(self sigset: reenterInterpreter jmp: 0) > 1 ifTrue:
 		[^0].
-	(self isMachineCodeFrame: framePointer) ifTrue:
+	(self isMachineCodeFrame: self framePointer) ifTrue:
 		[self returnToExecutive: false postContextSwitch: true
 		 "NOTREACHED"].
-	self setMethod: (self iframeMethod: framePointer).
+	self setMethod: (self iframeMethod: self framePointer).
 	instructionPointer = cogit ceReturnToInterpreterPC ifTrue:
-		[instructionPointer := self iframeSavedIP: framePointer].
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer imbar: true line: #'__LINE__'.
+		[instructionPointer := self iframeSavedIP: self framePointer].
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer imbar: true line: #'__LINE__'.
 	self interpret.
 	"NOTREACHED"
 	^0
@@ -905,7 +905,7 @@ CoInterpreterMT >> ownVM: threadIndexAndFlags [
 	 of an interpreter callee calling a machine code caller is ceReturnToInterpreterPC."
 	(vmThread inMachineCode
 	 and: [instructionPointer >= objectMemory startOfMemory]) ifTrue:
-		[self iframeSavedIP: framePointer put: instructionPointer.
+		[self iframeSavedIP: self framePointer put: instructionPointer.
 		 instructionPointer := cogit ceReturnToInterpreterPC].
 	newMethod := vmThread newMethodOrNull.
 	argumentCount := vmThread argumentCount.
@@ -1041,7 +1041,7 @@ CoInterpreterMT >> preemptDisowningThread [
 	 ceReturnToInterpreterPC must be maintained."
 	self push: instructionPointer.
 	self externalWriteBackHeadFramePointers.
-	activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer.
+	activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer.
 	objectMemory
 		storePointer: SuspendedContextIndex
 		ofObject: activeProc
@@ -1395,7 +1395,7 @@ CoInterpreterMT >> threadSwitchIfNecessary: newProc from: sourceCode [
 			[self assert: newProc = self activeProcess.
 			 self push: instructionPointer.
 			 self externalWriteBackHeadFramePointers.
-			 activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer.
+			 activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer.
 			 objectMemory storePointer: SuspendedContextIndex ofObject: newProc withValue: activeContext].
 		 vmThread := cogThreadManager vmThreadAt: newProcThreadId.
 		 vmThread priority: (self quickFetchInteger: PriorityIndex ofObject: newProc).
@@ -1419,7 +1419,7 @@ CoInterpreterMT >> transferTo: newProc from: sourceCode [
 	statProcessSwitch := statProcessSwitch + 1.
 	self push: instructionPointer.
 	self externalWriteBackHeadFramePointers.
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer.
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer.
 	"ensureMethodIsCogged: in makeBaseFrameFor: in
 	 externalSetStackPageAndPointersForSuspendedContextOfProcess:
 	 below may do a code compaction. Nil instructionPointer to avoid it getting pushed twice."
@@ -1427,7 +1427,7 @@ CoInterpreterMT >> transferTo: newProc from: sourceCode [
 	sched := self schedulerPointer.
 	oldProc := objectMemory fetchPointer: ActiveProcessIndex ofObject: sched.
 	self recordContextSwitchFrom: oldProc in: sourceCode.
-	activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer + objectMemory wordSize.
+	activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer + objectMemory wordSize.
 	objectMemory storePointer: SuspendedContextIndex ofObject: oldProc withValue: activeContext.
 
 	newProc isNil ifTrue:

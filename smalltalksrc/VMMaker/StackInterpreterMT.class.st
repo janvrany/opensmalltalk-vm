@@ -190,8 +190,8 @@ StackInterpreterMT >> activateNewClosure: blockClosure outer: outerContext metho
 	self assert: (objectMemory isOopCompiledMethod: theMethod).
 
 	self push: instructionPointer.
-	self push: framePointer.
-	framePointer := stackPointer.
+	self push: self framePointer.
+	self framePointer: self stackPointer.
 	self push: theMethod.
 	self push: (self encodeFrameFieldHasContext: false isBlock: true numArgs: numArgs).
 	self push: objectMemory nilObject. "FxThisContext field"
@@ -205,8 +205,8 @@ StackInterpreterMT >> activateNewClosure: blockClosure outer: outerContext metho
 					fetchPointer: i + ClosureFirstCopiedValueIndex
 					ofObject: blockClosure)].
 
-	self assert: (self frameIsBlockActivation: framePointer).
-	self assert: (self frameHasContext: framePointer) not.
+	self assert: (self frameIsBlockActivation: self framePointer).
+	self assert: (self frameHasContext: self framePointer) not.
 
 	"The initial instructions in the block nil-out remaining temps."
 
@@ -220,7 +220,7 @@ StackInterpreterMT >> activateNewClosure: blockClosure outer: outerContext metho
 
 	"Now check for stack overflow or an event (interrupt, must scavenge, etc)"
 	switched := false.
-	stackPointer < stackLimit ifTrue:
+	self stackPointer < stackLimit ifTrue:
 		[switched := self handleStackOverflowOrEventAllowContextSwitch: mayContextSwitch].
 	self returnToExecutive: true postContextSwitch: switched
 ]
@@ -233,8 +233,8 @@ StackInterpreterMT >> activateNewFullClosure: blockClosure method: theMethod num
 	self assert: theMethod = (objectMemory fetchPointer: FullClosureCompiledBlockIndex ofObject: blockClosure).
 	numCopied := self copiedValueCountOfFullClosure: blockClosure.
 	self push: instructionPointer.
-	self push: framePointer.
-	framePointer := stackPointer.
+	self push: self framePointer.
+	self framePointer: self stackPointer.
 	self push: theMethod.
 	self push: (self encodeFrameFieldHasContext: false isBlock: true numArgs: numArgs).
 	self push: objectMemory nilObject. "FxThisContext field"
@@ -248,8 +248,8 @@ StackInterpreterMT >> activateNewFullClosure: blockClosure method: theMethod num
 					fetchPointer: i + FullClosureFirstCopiedValueIndex
 					ofObject: blockClosure)].
 
-	self assert: (self frameIsBlockActivation: framePointer).
-	self assert: (self frameHasContext: framePointer) not.
+	self assert: (self frameIsBlockActivation: self framePointer).
+	self assert: (self frameHasContext: self framePointer) not.
 
 	methodHeader := objectMemory methodHeaderOf: theMethod.
 	numTemps := self temporaryCountOfMethodHeader: methodHeader.
@@ -262,7 +262,7 @@ StackInterpreterMT >> activateNewFullClosure: blockClosure method: theMethod num
 
 	"Now check for stack overflow or an event (interrupt, must scavenge, etc)"
 	switched := false.
-	stackPointer < stackLimit ifTrue:
+	self stackPointer < stackLimit ifTrue:
 		[switched := self handleStackOverflowOrEventAllowContextSwitch: mayContextSwitch].
 	self returnToExecutive: true postContextSwitch: switched
 ]
@@ -274,7 +274,7 @@ StackInterpreterMT >> activateNewMethod [
 
 	"Now check for stack overflow or an event (interrupt, must scavenge, etc)."
 	switched := true.
-	stackPointer < stackLimit ifTrue:
+	self stackPointer < stackLimit ifTrue:
 		[switched := self handleStackOverflowOrEventAllowContextSwitch: (self canContextSwitchIfActivating: newMethod header: methodHeader)].
 	self returnToExecutive: true postContextSwitch: switched
 ]
@@ -421,7 +421,7 @@ StackInterpreterMT >> callbackEnter: callbackID [
 		[^false].
 	jmpDepth := jmpDepth + 1.
 
-	wasInMachineCode := self isMachineCodeFrame: framePointer.
+	wasInMachineCode := self isMachineCodeFrame: self framePointer.
 	calledFromMachineCode := instructionPointer <= objectMemory startOfMemory.
 
 	"Suspend the currently active process"
@@ -467,11 +467,11 @@ StackInterpreterMT >> callbackEnter: callbackID [
 	self transferTo: (suspendedCallbacks at: jmpDepth) from: CSCallbackLeave.
 	newMethod := suspendedMethods at: jmpDepth.	"see comment above"
 	argumentCount := self argumentCountOf: newMethod.
-	self assert: wasInMachineCode = (self isMachineCodeFrame: framePointer).
+	self assert: wasInMachineCode = (self isMachineCodeFrame: self framePointer).
 	"Even if the context was flushed to the heap and rebuilt in transferTo:from:
 	above it will remain an interpreted frame because the context's pc would
 	remain a bytecode pc.  So the instructionPointer must also be a bytecode pc."
-	self assert: (self isMachineCodeFrame: framePointer) not.
+	self assert: (self isMachineCodeFrame: self framePointer) not.
 	self assert: instructionPointer > objectMemory startOfMemory.
 	self assert: primFailCode = 0.
 	jmpDepth := jmpDepth-1.
@@ -506,12 +506,12 @@ StackInterpreterMT >> cedeToHigherPriorityThreads [
 
 	self assert: vmThread priority > activePriority.
 	self assert: vmThread ~= cogThreadManager currentVMThread.
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer.
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer.
 
 	maxWaitingPriority > vmThread priority ifTrue:
 		[maxWaitingPriority := vmThread priority].
 	statProcessSwitch := statProcessSwitch + 1.
-	activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer.
+	activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer.
 	objectMemory storePointer: SuspendedContextIndex ofObject: activeProc withValue: activeContext.
 	self push: instructionPointer.
 	self externalWriteBackHeadFramePointers.
@@ -808,11 +808,11 @@ StackInterpreterMT >> enterSmalltalkExecutiveImplementation [
 	"Setjmp for reentry into interpreter from elsewhere, e.g. machine-code trampolines."
 	(self sigset: reenterInterpreter jmp: 0) > 1 ifTrue:
 		[^0].
-	(self isMachineCodeFrame: framePointer) ifTrue:
+	(self isMachineCodeFrame: self framePointer) ifTrue:
 		[self returnToExecutive: false postContextSwitch: true
 		 "NOTREACHED"].
-	self setMethod: (self iframeMethod: framePointer).
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer imbar: true line: #'__LINE__'.
+	self setMethod: (self iframeMethod: self framePointer).
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer imbar: true line: #'__LINE__'.
 	self interpret.
 	"NOTREACHED"
 	^0
@@ -1321,7 +1321,7 @@ StackInterpreterMT >> preemptDisowningThread [
 	 ceReturnToInterpreterPC must be maintained."
 	self push: instructionPointer.
 	self externalWriteBackHeadFramePointers.
-	activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer.
+	activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer.
 	objectMemory
 		storePointer: SuspendedContextIndex
 		ofObject: activeProc
@@ -1712,9 +1712,9 @@ StackInterpreterMT >> returnToExecutive: inInterpreter postContextSwitch: switch
 	| fullyInInterpreter |
 	<var: #cogMethod type: #'CogBlockMethod *'>
 
-	self setMethod: (self iframeMethod: framePointer).
+	self setMethod: (self iframeMethod: self framePointer).
 	fullyInInterpreter := inInterpreter.
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer imbar: true line: #'__LINE__'.
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer imbar: true line: #'__LINE__'.
 	fullyInInterpreter ifFalse:
 		[self siglong: reenterInterpreter jmp: ReturnToInterpreter.
 		 "NOTREACHED"].
@@ -1890,7 +1890,7 @@ StackInterpreterMT >> threadSwitchIfNecessary: newProc from: sourceCode [
 			[self assert: newProc = self activeProcess.
 			 self push: instructionPointer.
 			 self externalWriteBackHeadFramePointers.
-			 activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer.
+			 activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer.
 			 objectMemory storePointer: SuspendedContextIndex ofObject: newProc withValue: activeContext].
 		 vmThread := cogThreadManager vmThreadAt: newProcThreadId.
 		 vmThread priority: (self quickFetchInteger: PriorityIndex ofObject: newProc).
@@ -1920,7 +1920,7 @@ StackInterpreterMT >> transferTo: newProc from: sourceCode [
 	statProcessSwitch := statProcessSwitch + 1.
 	self push: instructionPointer.
 	self externalWriteBackHeadFramePointers.
-	self assertValidExecutionPointe: instructionPointer r: framePointer s: stackPointer.
+	self assertValidExecutionPointe: instructionPointer r: self framePointer s: self stackPointer.
 	"ensureMethodIsCogged: in makeBaseFrameFor: in
 	 externalSetStackPageAndPointersForSuspendedContextOfProcess:
 	 below may do a code compaction. Nil instructionPointer to avoid it getting pushed twice."
@@ -1928,7 +1928,7 @@ StackInterpreterMT >> transferTo: newProc from: sourceCode [
 	sched := self schedulerPointer.
 	oldProc := objectMemory fetchPointer: ActiveProcessIndex ofObject: sched.
 	self recordContextSwitchFrom: oldProc in: sourceCode.
-	activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer.
+	activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer.
 	objectMemory storePointer: SuspendedContextIndex ofObject: oldProc withValue: activeContext.
 
 	newProc isNil ifTrue:

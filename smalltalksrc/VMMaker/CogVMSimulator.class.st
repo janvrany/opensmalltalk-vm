@@ -379,7 +379,7 @@ CogVMSimulator >> ceContext: aOnceMarriedContext instVar: slotIndex value: anOop
 CogVMSimulator >> ceCounterTripped: condition [
 	| counterTrippedSelector |
 	self transcript cr; nextPutAll: 'counter tripped in '.
-	self shortPrintFrame: framePointer.
+	self shortPrintFrame: self framePointer.
 	counterTrippedSelector := objectMemory maybeSplObj: SelectorCounterTripped.
 	(counterTrippedSelector isNil
 	or: [counterTrippedSelector = objectMemory nilObject]) ifFalse:
@@ -420,7 +420,7 @@ CogVMSimulator >> ceSend: selector super: superNormalBar to: rcvr numArgs: numAr
 		[self halt]."
 	self logSend: selector.
 	cogit assertCStackWellAligned.
-	self maybeCheckStackDepth: numArgs + 1 sp: stackPointer pc: (stackPages longAt: stackPointer).
+	self maybeCheckStackDepth: numArgs + 1 sp: self stackPointer pc: (stackPages longAt: self stackPointer).
 	^super ceSend: selector super: superNormalBar to: rcvr numArgs: numArgs
 ]
 
@@ -431,8 +431,8 @@ CogVMSimulator >> ceSendAbort: selector to: rcvr numArgs: numArgs [
 	self logSend: selector.
 	cogit assertCStackWellAligned.
 	self maybeCheckStackDepth: numArgs + 1
-		sp: stackPointer
-		pc: (stackPages longAt: stackPointer).
+		sp: self stackPointer
+		pc: (stackPages longAt: self stackPointer).
 	^super ceSendAbort: selector to: rcvr numArgs: numArgs
 ]
 
@@ -1057,9 +1057,9 @@ CogVMSimulator >> externalInstVar: index ofContext: aContext put: anOop [
 CogVMSimulator >> externalSetStackPageAndPointersForSuspendedContextOfProcess: aProcess [
 	"Override to check stack depth (hence in the simulator only)."
 	super externalSetStackPageAndPointersForSuspendedContextOfProcess:  aProcess.
-	(self isMachineCodeFrame: framePointer) ifTrue:
+	(self isMachineCodeFrame: self framePointer) ifTrue:
 		[self maybeCheckStackDepth: 0
-			sp: stackPointer
+			sp: self stackPointer
 			pc: instructionPointer]
 ]
 
@@ -1170,11 +1170,6 @@ CogVMSimulator >> frameOfMarriedContext: aContext [
 	senderOop := objectMemory fetchPointer: SenderIndex ofObject: aContext.
 	self assert: (objectMemory isIntegerObject: senderOop).
 	^self withoutSmallIntegerTags: senderOop
-]
-
-{ #category : #'debug support' }
-CogVMSimulator >> framePointer [
-	^framePointer
 ]
 
 { #category : #'I/O primitives' }
@@ -2056,7 +2051,7 @@ CogVMSimulator >> isWidowedContext: aOnceMarriedContext [
 	"See if the argument is connected with a live frame or not.
 	 If it is not, turn it into a bereaved single context."
 	(stackPages isFree: stackPage) ifFalse: "in baseReturn the active page has been freed."
-		[((stackPages somePageHasHeadFrameFP: framePointer)
+		[((stackPages somePageHasHeadFrameFP: self framePointer)
 		  or: [(stackPages somePageHasHeadFrameFP: localFP)
 		  or: [stackPages allPagesFree]]) ifFalse:
 			[(thisContext sender sender method = (CoInterpreter >> #baseFrameReturn)
@@ -2327,15 +2322,15 @@ CogVMSimulator >> markAndTraceInterpreterOops: fullGCFlag [
 CogVMSimulator >> maybeCheckStackDepth: delta sp: sp pc: mcpc [
 	| asp bcpc startbcpc cogHomeMethod cogBlockMethod csp debugStackPointers |
 	debugStackDepthDictionary ifNil: [^self].
-	(self isMachineCodeFrame: framePointer) ifFalse: [^self].
-	cogBlockMethod := self mframeCogMethod: framePointer.
+	(self isMachineCodeFrame: self framePointer) ifFalse: [^self].
+	cogBlockMethod := self mframeCogMethod: self framePointer.
 	cogHomeMethod := self asCogHomeMethod: cogBlockMethod.
 	debugStackPointers := debugStackDepthDictionary
 								at: cogHomeMethod methodObject
 								ifAbsentPut: [self debugStackPointersFor: cogHomeMethod methodObject].
 	startbcpc := cogHomeMethod = cogBlockMethod
 					ifTrue: [self startPCOfMethod: cogHomeMethod methodObject]
-					ifFalse: [self startPCOfClosure: (self pushedReceiverOrClosureOfFrame: framePointer)].
+					ifFalse: [self startPCOfClosure: (self pushedReceiverOrClosureOfFrame: self framePointer)].
 	bcpc := cogit bytecodePCFor: mcpc startBcpc: startbcpc in: cogBlockMethod.
 	self assert: bcpc ~= 0.
 	((cogBlockMethod ~= cogHomeMethod or: [cogBlockMethod cmIsFullBlock])
@@ -2350,7 +2345,7 @@ CogVMSimulator >> maybeCheckStackDepth: delta sp: sp pc: mcpc [
 						ifTrue: [cogit endPCOf: cogHomeMethod methodObject]
 						ifFalse: [cogit lastBytecodePCForBlockAt: startbcpc in: cogHomeMethod methodObject].
 		 bcpc > lastbcpc ifTrue: [bcpc := lastbcpc]].
-	asp := self stackPointerIndexForFrame: framePointer WithSP: sp + objectMemory wordSize.
+	asp := self stackPointerIndexForFrame: self framePointer WithSP: sp + objectMemory wordSize.
 	csp := debugStackPointers at: bcpc ifAbsent: [-1].
 	"Compensate for some edge cases"
 	asp - delta = csp ifTrue:
@@ -3086,7 +3081,7 @@ CogVMSimulator >> printCurrentBytecodeOn: aStream [
 
 { #category : #'debug printing' }
 CogVMSimulator >> printECS [
-	self printCallStackFP: framePointer
+	self printCallStackFP: self framePointer
 ]
 
 { #category : #'debug printing' }
@@ -3561,11 +3556,6 @@ CogVMSimulator >> stackPages [
 	^stackPages
 ]
 
-{ #category : #'debug support' }
-CogVMSimulator >> stackPointer [
-	^stackPointer
-]
-
 { #category : #'stack pages' }
 CogVMSimulator >> stackZoneBase [
 	"In the simulator the stack zone starts immediately after the code zone."
@@ -3804,10 +3794,10 @@ CogVMSimulator >> utilitiesMenu: aMenuMorph [
 		add: 'print ext head frame' action: #printExternalHeadFrame;
 		add: 'print int head frame' action: #printHeadFrame;
 		add: 'print mc/cog head frame' action: [self printFrame: cogit processor fp WithSP: cogit processor sp];
-		add: 'short print ext head frame & callers' action: [self shortPrintFrameAndCallers: framePointer];
+		add: 'short print ext head frame & callers' action: [self shortPrintFrameAndCallers: self framePointer];
 		add: 'short print int head frame & callers' action: [self shortPrintFrameAndCallers: localFP];
 		add: 'short print mc/cog head frame & callers' action: [self shortPrintFrameAndCallers: cogit processor fp];
-		add: 'long print ext head frame & callers' action: [self printFrameAndCallers: framePointer SP: stackPointer];
+		add: 'long print ext head frame & callers' action: [self printFrameAndCallers: self framePointer SP: self stackPointer];
 		add: 'long print int head frame & callers' action: [self printFrameAndCallers: localFP SP: localSP];
 		add: 'long print mc/cog head frame & callers' action: [self printFrameAndCallers: cogit processor fp SP: cogit processor sp];
 		add: 'print frame...' action: [(self promptHex: 'print frame') ifNotNil: [:fp| self printFrame: fp]];
@@ -3817,9 +3807,9 @@ CogVMSimulator >> utilitiesMenu: aMenuMorph [
 		add: 'print call stack of...' action: [(self promptHex: 'context or process oop') ifNotNil: [:obj| self printCallStackOf: obj]];
 		add: 'print call stack of frame...' action: [(self promptHex: 'frame') ifNotNil: [:fp| self printCallStackFP: fp]];
 		add: 'print all stacks' action: #printAllStacks;
-		add: 'write back local ptrs' action: [stackPointer := localSP. framePointer := localFP. instructionPointer := localIP.
+		add: 'write back local ptrs' action: [self stackPointer: localSP. self framePointer: localFP. instructionPointer := localIP.
 											self writeBackHeadFramePointers];
-		add: 'write back mc ptrs' action: [stackPointer := cogit processor sp. framePointer := cogit processor fp. instructionPointer := cogit processor pc.
+		add: 'write back mc ptrs' action: [self stackPointer: cogit processor sp. self framePointer: cogit processor fp. instructionPointer := cogit processor pc.
 											self externalWriteBackHeadFramePointers];
 		addLine;
 		add: 'print rump C stack' action: [objectMemory printMemoryFrom: cogit processor sp to: cogit getCStackPointer];
@@ -3831,7 +3821,7 @@ CogVMSimulator >> utilitiesMenu: aMenuMorph [
 										  and: [(cogit methodZone methodFor: cogit processor pc) = 0])
 											ifTrue: [instructionPointer]
 											ifFalse: [cogit processor pc])];
-		add: 'disassemble ext head frame method' action: [cogit disassembleMethod: (self frameMethod: framePointer)];
+		add: 'disassemble ext head frame method' action: [cogit disassembleMethod: (self frameMethod: self framePointer)];
 		add: 'print oop...' action: [(self promptHex: 'print oop') ifNotNil: [:oop| self printOop: oop]];
 		add: 'long print oop...' action: [(self promptHex: 'print oop') ifNotNil: [:oop| self longPrintOop: oop]];
 		add: 'print context...' action: [(self promptHex: 'print context') ifNotNil: [:oop| self printContext: oop]];

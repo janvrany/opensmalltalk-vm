@@ -476,7 +476,7 @@ StackInterpreterPrimitives >> primitiveContextXray [
 	context := self stackTop.
 	(self isMarriedOrWidowedContext: context)
 		ifTrue:
-			[(self checkIsStillMarriedContext: context currentFP: framePointer)
+			[(self checkIsStillMarriedContext: context currentFP: self framePointer)
 				ifTrue: [flags := 3]
 				ifFalse: [flags := 1]]
 		ifFalse:
@@ -1192,8 +1192,8 @@ StackInterpreterPrimitives >> primitivePerform [
 	argumentCount to: 1 by: -1 do:
 		[:i|
 		stackPages
-			longAt: stackPointer + (i * objectMemory wordSize)
-			put: (stackPages longAt: stackPointer + ((i - 1) * objectMemory wordSize))].
+			longAt: self stackPointer + (i * objectMemory wordSize)
+			put: (stackPages longAt: self stackPointer + ((i - 1) * objectMemory wordSize))].
 	self pop: 1.
 	lookupClassTag := objectMemory fetchClassTagOf: newReceiver.
 	self sendBreakpoint: messageSelector receiver: newReceiver.
@@ -1209,9 +1209,9 @@ StackInterpreterPrimitives >> primitivePerform [
 		self unPop: 1.
 		1 to: argumentCount by: 1 do:
 			[:i |
-			stackPages longAt: stackPointer + ((i - 1) * objectMemory wordSize)
-				put: (stackPages longAt: stackPointer + (i * objectMemory wordSize))].
-		stackPages longAt: stackPointer + (argumentCount * objectMemory wordSize) put: messageSelector.
+			stackPages longAt: self stackPointer + ((i - 1) * objectMemory wordSize)
+				put: (stackPages longAt: self stackPointer + (i * objectMemory wordSize))].
+		stackPages longAt: self stackPointer + (argumentCount * objectMemory wordSize) put: messageSelector.
 		argumentCount := argumentCount + 1.
 		newMethod := performMethod.
 		 "Must reset primitiveFunctionPointer for checkForAndFollowForwardedPrimitiveState"
@@ -1598,14 +1598,14 @@ StackInterpreterPrimitives >> primitiveStoreStackp [
 		[theFP := self frameOfMarriedContext: ctxt.
 		 thePage := stackPages stackPageFor: theFP.
 		 ((onCurrentPage := thePage = stackPage)
-		 and: [theFP = framePointer]) ifTrue:
+		 and: [theFP = self framePointer]) ifTrue:
 			[^self primitiveFail]. "Probably easy to do this right here right now (just move stackPointer).  But fail for now."
 		 self externalDivorceFrame: theFP andContext: ctxt.
 		 onCurrentPage
 			ifTrue:
 				[self setStackPointersFromPage: stackPage]
 			ifFalse:
-				[self assert: stackPage = (stackPages stackPageFor: framePointer).
+				[self assert: stackPage = (stackPages stackPageFor: self framePointer).
 				 stackPages markStackPageMostRecentlyUsed: stackPage]].
 	stackp := self fetchStackPointerOf: ctxt.
 	"Nil any newly accessible cells"
@@ -1657,7 +1657,7 @@ StackInterpreterPrimitives >> primitiveTerminateTo [
 			[theFP := self frameOfMarriedContext: thisCtx.
 			 "Optimize terminating thisContext.  Move its frame down to be next to
 			  aContextOrNil's frame. Common in the exception system and so helps to be fast."
-			 (theFP = framePointer
+			 (theFP = self framePointer
 			  and: [pageToStopOn = stackPage]) ifTrue:
 				[(self frameCallerFP: theFP) ~= contextsFP ifTrue:
 					[stackedReceiverOffset := self frameStackedReceiverOffset: theFP.
@@ -1666,7 +1666,7 @@ StackInterpreterPrimitives >> primitiveTerminateTo [
 					 newSP := self frameCallerSP: frameAbove.
 					 newFP := newSP - stackedReceiverOffset - objectMemory wordSize.
 					 theFP + stackedReceiverOffset
-						to: stackPointer
+						to: self stackPointer
 						by: objectMemory wordSize negated
 						do: [:source|
 							newSP := newSP - objectMemory wordSize.
@@ -1680,8 +1680,8 @@ StackInterpreterPrimitives >> primitiveTerminateTo [
 					 objectMemory storePointerUnchecked: InstructionPointerIndex
 						ofObject: thisCtx
 						withValue: (self withSmallIntegerTags: contextsFP).
-					 framePointer := newFP.
-					 stackPointer := newSP].
+					 self framePointer: newFP.
+					 self stackPointer: newSP].
 				self pop: 1.
 				self assert: stackPage = stackPages mostRecentlyUsedPage.
 				^nil].
@@ -1769,7 +1769,7 @@ StackInterpreterPrimitives >> primitiveTerminateTo [
 	self assert: stackPages pageListIsWellFormed.
 	(self isMarriedOrWidowedContext: thisCtx)
 		ifTrue:
-			[self assert: (self checkIsStillMarriedContext: thisCtx currentFP: framePointer).
+			[self assert: (self checkIsStillMarriedContext: thisCtx currentFP: self framePointer).
 			 self assert: (self isBaseFrame: (self frameOfMarriedContext: thisCtx)).
 			 theFP := self frameOfMarriedContext: thisCtx.
 			 self frameCallerContext: theFP put: aContextOrNil]
@@ -1883,7 +1883,7 @@ StackInterpreterPrimitives >> primitiveVoidReceiver [
 	"Potentially crash the VM by voiding the receiver.  A subsequent inst var
 	 access in the caller's frame should indirect through a null pointer."
 	<export: true>
-	stackPages longAtPointer: (self frameReceiverLocation: framePointer) put: 0
+	stackPages longAtPointer: (self frameReceiverLocation: self framePointer) put: 0
 ]
 
 { #category : #'system control primitives' }

@@ -226,7 +226,7 @@ CoInterpreterPrimitives >> primitiveContextXray [
 	pc := objectMemory fetchPointer: InstructionPointerIndex ofObject: context.
 	(self isMarriedOrWidowedContext: context)
 		ifTrue:
-			[(self checkIsStillMarriedContext: context currentFP: framePointer)
+			[(self checkIsStillMarriedContext: context currentFP: self framePointer)
 				ifTrue: [theFP := self frameOfMarriedContext: context.
 						(self isMachineCodeFrame: theFP)
 							ifTrue: [flags := 7]
@@ -627,7 +627,7 @@ CoInterpreterPrimitives >> primitiveSnapshot [
 	 Override to jump to the interpreter because the machine code zone is now void."
 	<inline: false>
 	self snapshot: false.
-	(self iframeMethod: framePointer) = newMethod ifTrue:
+	(self iframeMethod: self framePointer) = newMethod ifTrue:
 		["snapshot: has reached the end and built a frame.
 		 In the JIT we need to back-up the pc before reentering the interpreter."
 		instructionPointer := instructionPointer - 1].
@@ -642,7 +642,7 @@ CoInterpreterPrimitives >> primitiveSnapshotEmbedded [
 	 Override to jump to the interpreter because the machine code zone is now void."
 	<inline: false>
 	self snapshot: true.
-	(self iframeMethod: framePointer) = newMethod ifTrue:
+	(self iframeMethod: self framePointer) = newMethod ifTrue:
 		["snapshot: has reached the end and built a frame.
 		 In the JIT we need to back-up the pc before reentering the interpreter."
 		instructionPointer := instructionPointer - 1].
@@ -727,7 +727,7 @@ CoInterpreterPrimitives >> primitiveTerminateTo [
 			[theFP := self frameOfMarriedContext: thisCtx.
 			 "Optimize terminating thisContext.  Move its frame down to be next to
 			  aContextOrNil's frame. Common in the exception system and so helps to be fast."
-			 (theFP = framePointer
+			 (theFP = self framePointer
 			  and: [pageToStopOn = stackPage]) ifTrue:
 				[self assertValidStackedInstructionPointersIn: stackPage line: #'__LINE__'.
 				 (self frameCallerFP: theFP) ~= contextsFP ifTrue:
@@ -739,7 +739,7 @@ CoInterpreterPrimitives >> primitiveTerminateTo [
 					 newSP := self frameCallerSP: frameAbove.
 					 newFP := newSP - stackedReceiverOffset - objectMemory wordSize.
 					 theFP + stackedReceiverOffset
-						to: stackPointer
+						to: self stackPointer
 						by: objectMemory wordSize negated
 						do: [:source|
 							newSP := newSP - objectMemory wordSize.
@@ -759,8 +759,8 @@ CoInterpreterPrimitives >> primitiveTerminateTo [
 					 objectMemory storePointerUnchecked: InstructionPointerIndex
 						ofObject: thisCtx
 						withValue: (self withSmallIntegerTags: contextsFP).
-					 framePointer := newFP.
-					 stackPointer := newSP].
+					 self framePointer: newFP.
+					 self stackPointer: newSP].
 				 self pop: 1.
 				 self assertValidStackedInstructionPointersIn: stackPage line: #'__LINE__'.
 				 self assert: stackPage = stackPages mostRecentlyUsedPage.
@@ -851,7 +851,7 @@ CoInterpreterPrimitives >> primitiveTerminateTo [
 	self assert: stackPages pageListIsWellFormed.
 	(self isMarriedOrWidowedContext: thisCtx)
 		ifTrue:
-			[self assert: (self checkIsStillMarriedContext: thisCtx currentFP: framePointer).
+			[self assert: (self checkIsStillMarriedContext: thisCtx currentFP: self framePointer).
 			 self assert: (self isBaseFrame: (self frameOfMarriedContext: thisCtx)).
 			 theFP := self frameOfMarriedContext: thisCtx.
 			 self frameCallerContext: theFP put: aContextOrNil]
@@ -893,7 +893,7 @@ CoInterpreterPrimitives >> primitiveVoidVMStateForMethod [
 			 scanHeapForContexts := self booleanValueOf: self stackTop.
 			 self failed ifTrue:
 				[^self primitiveFailFor: PrimErrBadArgument]].
-	NewspeakVM
+	false
 		ifFalse:
 			[argumentCount > 1 ifTrue:
 				[^self primitiveFailFor: PrimErrBadNumArgs]]
@@ -904,7 +904,7 @@ CoInterpreterPrimitives >> primitiveVoidVMStateForMethod [
 				 (objectMemory isOopCompiledMethod: methodObj) ifFalse:
 					[^self primitiveFailFor: PrimErrBadArgument]]].
 	self flushMethodCacheForMethod: methodObj.
-	activeContext := self ensureFrameIsMarried: framePointer SP: stackPointer.
+	activeContext := self ensureFrameIsMarried: self framePointer SP: self stackPointer.
 	self ensurePushedInstructionPointer.
 	self externalWriteBackHeadFramePointers.
 	(hasCogMethod := self methodHasCogMethod: methodObj) ifTrue:
