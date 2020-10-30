@@ -1172,6 +1172,20 @@ CogVMSimulator >> frameOfMarriedContext: aContext [
 	^self withoutSmallIntegerTags: senderOop
 ]
 
+{ #category : #'cog jit support' }
+CogVMSimulator >> framePointer [
+	^true "framePointer is in C"
+		ifTrue: [ objectMemory longAt: cogit framePointerAddress ]
+		ifFalse: [ super framePointer ]
+]
+
+{ #category : #'cog jit support' }
+CogVMSimulator >> framePointer: theFP [
+	^true "framePointer is in C"
+		ifTrue: [ objectMemory longAt: cogit framePointerAddress put: theFP ]
+		ifFalse: [ super framePointer: theFP ]
+]
+
 { #category : #'I/O primitives' }
 CogVMSimulator >> fullDisplay [
 	| primFailCodeValue |
@@ -3554,6 +3568,20 @@ CogVMSimulator >> stackPage [
 { #category : #accessing }
 CogVMSimulator >> stackPages [
 	^stackPages
+]
+
+{ #category : #'cog jit support' }
+CogVMSimulator >> stackPointer [
+	^true "stackPointer is in C"
+		ifTrue: [ objectMemory longAt: cogit stackPointerAddress ]
+		ifFalse: [ super stackPointer ]
+]
+
+{ #category : #'cog jit support' }
+CogVMSimulator >> stackPointer: theSP [
+	^true "stackPointer is in C"
+		ifTrue: [ objectMemory longAt: cogit stackPointerAddress put: theSP ]
+		ifFalse: [ super stackPointer: theSP ]
 ]
 
 { #category : #'stack pages' }

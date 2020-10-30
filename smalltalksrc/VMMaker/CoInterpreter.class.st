@@ -3552,10 +3552,14 @@ CoInterpreter >> frameNumTemps: theFP [
 
 { #category : #'trampoline support' }
 CoInterpreter >> framePointerAddress [
-	<api>
-	<returnTypeC: #usqInt>
-	^self cCode: [(self addressOf: #framePointer shouldBeImplemented) asUnsignedInteger]
-		inSmalltalk: [cogit simulatedReadWriteVariableAddress: #framePointer in: self]
+	| framePointerIsInC |
+	framePointerIsInC := true.
+	"This is just to show the idea of SIMPROD.
+	In reality, 'true' will of course be configurable,
+	and the address will be calculated using Jan's magic."
+	^framePointerIsInC
+		ifTrue: [ 16rCA20004 ]
+		ifFalse: [cogit simulatedReadWriteVariableAddress: #stackPointer in: self]
 ]
 
 { #category : #'frame access' }
@@ -7164,9 +7168,12 @@ CoInterpreter >> stackPagesClass [
 { #category : #'trampoline support' }
 CoInterpreter >> stackPointerAddress [
 	| stackPointerIsInC |
-	stackPointerIsInC := false.
+	stackPointerIsInC := true.
+	"This is just to show the idea of SIMPROD.
+	In reality, 'true' will of course be configurable,
+	and the address will be calculated using Jan's magic."
 	^stackPointerIsInC
-		ifTrue: [ 16r0 ]
+		ifTrue: [ 16rCA20000 ]
 		ifFalse: [cogit simulatedReadWriteVariableAddress: #stackPointer in: self]
 ]
 
