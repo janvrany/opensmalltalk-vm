@@ -352,32 +352,24 @@ CogPOWERCompiler >> computeMaximumSize [
 		[Jump]					-> [^4*4].
 		[JumpFull]				-> [^4*4].
 		[JumpLong]				-> [^4*4].
-		[JumpZero]				-> [^8].
-		[JumpNonZero]			-> [^8].
-		[JumpNegative]			-> [^8].
-		[JumpNonNegative]		-> [^8].
-		[JumpOverflow]			-> [^8].
-		[JumpNoOverflow]		-> [^8].
-		[JumpCarry]			-> [^8].
-		[JumpNoCarry]			-> [^8].
-		[JumpLess]				-> [^8].
-		[JumpGreaterOrEqual]	-> [^8].
-		[JumpGreater]			-> [^8].
-		[JumpLessOrEqual]		-> [^8].
-		[JumpBelow]			-> [^8].
-		[JumpAboveOrEqual]	-> [^8].
-		[JumpAbove]			-> [^8].
-		[JumpBelowOrEqual]	-> [^8].
-		[JumpLongZero]		-> [^8].
-		[JumpLongNonZero]	-> [^8].
-		[JumpFPEqual]			-> [^8].
-		[JumpFPNotEqual]		-> [^8].
-		[JumpFPLess]			-> [^8].
-		[JumpFPGreaterOrEqual]-> [^8].
-		[JumpFPGreater]		-> [^8].
-		[JumpFPLessOrEqual]	-> [^8].
-		[JumpFPOrdered]		-> [^8].
-		[JumpFPUnordered]		-> [^8].
+		[JumpZero]				-> [^12].
+		[JumpNonZero]			-> [^12].
+		[JumpNegative]			-> [^12].
+		[JumpNonNegative]		-> [^12].
+		[JumpOverflow]			-> [^12].
+		[JumpNoOverflow]		-> [^12].
+		[JumpCarry]			-> [^12].
+		[JumpNoCarry]			-> [^12].
+		[JumpLess]				-> [^12].
+		[JumpGreaterOrEqual]	-> [^12].
+		[JumpGreater]			-> [^12].
+		[JumpLessOrEqual]		-> [^12].
+		[JumpBelow]			-> [^12].
+		[JumpAboveOrEqual]	-> [^12].
+		[JumpAbove]			-> [^12].
+		[JumpBelowOrEqual]	-> [^12].
+		[JumpLongZero]		-> [^12].
+		[JumpLongNonZero]	-> [^12].
 		[RetN]					-> [^12].
 		[Stop]					-> [^4].
 
@@ -485,7 +477,6 @@ CogPOWERCompiler >> concretizeAddCwR [
 { #category : #'concretize - arithmetic' }
 CogPOWERCompiler >> concretizeAddRR [
 	<operands: #(srcR dstR)>
-	<powerpc: 'mtxer 20'>
 	<powerpc: 'add. {dstR}, {dstR}, {srcR}'>
 ]
 
@@ -663,14 +654,14 @@ CogPOWERCompiler >> concretizeJumpFull [
 { #category : #'concretize - control' }
 CogPOWERCompiler >> concretizeJumpIfFalse: conditionBit [
 	| bd |
-	bd := self computeJumpTargetOffsetPlus: 4.
+	bd := self computeJumpTargetOffsetPlus: 8.
 	^self concretizzeJumpIfFalse: conditionBit li: bd//4
 ]
 
 { #category : #'concretize - control' }
 CogPOWERCompiler >> concretizeJumpIfTrue: conditionBit [
 	| bd |
-	bd := self computeJumpTargetOffsetPlus: 4. "+4 because this is relative to the address of the tile, and the tile has one instruction before the jump"
+	bd := self computeJumpTargetOffsetPlus: 8. "+8 because this is relative to the address of the tile, and the tile has two instructions before the jump"
 	^self concretizzeJumpIfTrue: conditionBit li: bd//4
 ]
 
@@ -1089,8 +1080,22 @@ CogPOWERCompiler >> concretizzeJumpIfFalse: conditionBit li: li [
 	"Branch-conditional B-form's +-32K is too small
 	 for jumping over the whole code-zone.
 	 Invert the condition and skip over the actual jump."
-
+	<powerpc: 'or 0, 0, 0'>
 	<powerpc: 'bc 12, {conditionBit}, 2'> "12 = Jump if true"
+	<powerpc: 'b {li}'>
+]
+
+{ #category : #'concretize - control' }
+CogPOWERCompiler >> concretizzeJumpIfNoOverflow: li [
+	<powerpc: 'mcrxr 0'>
+	<powerpc: 'bc 12, 1, 2'> "12 = Jump if false, 1 = OV in XER, 2 = jump over b{li}"
+	<powerpc: 'b {li}'>
+]
+
+{ #category : #'concretize - control' }
+CogPOWERCompiler >> concretizzeJumpIfOverflow: li [
+	<powerpc: 'mcrxr 0'>
+	<powerpc: 'bc 4, 1, 2'> "4 = Jump if true, 1 = OV in XER, 2 = jump over b{li}"
 	<powerpc: 'b {li}'>
 ]
 
@@ -1099,7 +1104,7 @@ CogPOWERCompiler >> concretizzeJumpIfTrue: conditionBit li: li [
 	"Branch-conditional B-form's +-32K is too small
 	 for jumping over the whole code-zone.
 	 Invert the condition and skip over the actual jump."
-
+	<powerpc: 'or 0, 0, 0'>
 	<powerpc: 'bc 4, {conditionBit}, 2'> "12 = Jump if false"
 	<powerpc: 'b {li}'>
 ]
@@ -1201,8 +1206,8 @@ CogPOWERCompiler >> dispatchConcretize [
 		[JumpNonZero]				-> [^self concretizeJumpIfFalse: 2].
 		[JumpNegative]				-> [^self concretizeJumpIfTrue: 0].
 		[JumpNonNegative]			-> [^self concretizeJumpIfFalse: 0].
-		[JumpOverflow]				-> [^self concretizeJumpIfTrue: 3].
-		[JumpNoOverflow]			-> [^self concretizeJumpIfFalse: 3].
+		[JumpOverflow]				-> [^self concretizzeJumpIfOverflow: (self computeJumpTargetOffsetPlus: 8)//4].
+		[JumpNoOverflow]			-> [^self concretizzeJumpIfNoOverflow: (self computeJumpTargetOffsetPlus: 8)//4].
 		[JumpCarry]				-> [^self concretizeJumpIfTrue: 3 "BOGUS"].
 		[JumpNoCarry]				-> [^self concretizeJumpIfFalse: 3 "BOGUS"].
 		[JumpLess]					-> [^self concretizeJumpIfTrue: 0].
@@ -1673,7 +1678,7 @@ CogPOWERCompiler >> jumpLongByteSize [
 
 { #category : #sizing }
 CogPOWERCompiler >> jumpLongConditionalByteSize [
-	^2*4
+	^3*4
 ]
 
 { #category : #'inline cacheing' }
