@@ -6662,6 +6662,13 @@ CoInterpreter >> receiver [
 	^stackPages longAt: localFP + FoxIFReceiver
 ]
 
+{ #category : #'debug printing' }
+CoInterpreter >> receiverAddressOf: theFP [
+	^theFP + ((self isMachineCodeFrame: theFP)
+		ifTrue: [FoxMFReceiver] ifFalse: [FoxIFReceiver]).
+
+]
+
 { #category : #'debug support' }
 CoInterpreter >> recordContextSwitchFrom: aProcess in: sourceCode [
 	cogit recordEventTrace ifTrue:
@@ -7556,6 +7563,124 @@ CoInterpreter >> varBaseAddress [
 	<returnTypeC: #usqInt>
 	^self cCode: [(self addressOf: stackPointer) asUnsignedInteger - 16r40]
 		inSmalltalk: [cogit fakeVarBaseAddress]
+]
+
+{ #category : #'debug printing' }
+CoInterpreter >> variablePairsFP: theFP [
+	^(self isMachineCodeFrame: theFP)
+		ifTrue: [ self variablePairsMFrameFP: theFP ]
+		ifFalse: [ self variablePairsIFrameFP: theFP ]
+]
+
+{ #category : #'debug printing' }
+CoInterpreter >> variablePairsFP: theFP method: theMethod methodEnd: theMethodEnd numArgs: numArgs numTemps: numTemps [
+	"cf. printFrame:WithSP:"
+	| fieldList theSP rcvrAddress topThing |
+	fieldList := OrderedCollection new.
+	theSP := self findSPFor: theFP.
+	(self frameIsBlockActivation: theFP) ifTrue: [self shouldBeImplemented].
+	(self isBaseFrame: theFP) ifTrue: [ "self shouldBeImplemented" 
+		"self printFrameOop: '(caller ctxt'
+			at: theFP + (self frameStackedReceiverOffset: theFP) + (2 * objectMemory wordSize).
+		 self printFrameOop: '(saved ctxt'
+			at: theFP + (self frameStackedReceiverOffset: theFP) + (1 * objectMemory wordSize)"].
+	fieldList add: (GTInspectorDynamicNode
+		hostObject: self
+		label: 'rcvr/clsr'
+		value: (self surrogateForOop: theFP + FoxCallerSavedIP + ((numArgs + 1) * objectMemory wordSize))).
+	numArgs to: 1 by: -1 do: [:i|
+		| argName it |
+		argName := 'arg', (numArgs - i) printString.
+		it := self surrogateForOop: theFP + FoxCallerSavedIP + (i * objectMemory wordSize).
+		fieldList add: (GTInspectorDynamicNode
+			hostObject: self
+			label: argName
+			value: it )].
+	
+	
+"	
+	self printFrameThing: 'caller ip'
+		at: theFP + FoxCallerSavedIP
+		extraString: ((stackPages longAt: theFP + FoxCallerSavedIP) = cogit ceReturnToInterpreterPC ifTrue:
+						['ceReturnToInterpreter']).
+	self printFrameThing: 'saved fp' at: theFP + FoxSavedFP.
+	self printFrameMethodFor: theFP.
+	(self isMachineCodeFrame: theFP) ifTrue:
+		[self printFrameFlagsForFP: theFP].
+	self printFrameOop: 'context' at: theFP + FoxThisContext.
+	(self isMachineCodeFrame: theFP) ifFalse:
+		[self printFrameFlagsForFP: theFP]."
+	rcvrAddress := self receiverAddressOf: theFP.
+	fieldList add: (GTInspectorDynamicNode
+		hostObject: self
+		label: 'receiver'
+		value: (self surrogateForOop: rcvrAddress)).
+	
+	topThing := stackPages longAt: theSP.
+	fieldList add: (GTInspectorDynamicNode
+		hostObject: self
+		label: 'stack top'
+		value: (self surrogateForOop: theSP)).
+	
+	
+	(self oop: topThing isGreaterThanOrEqualTo: theMethod andLessThan: theMethodEnd)
+		ifTrue:
+			[rcvrAddress - objectMemory wordSize to: theSP + objectMemory wordSize by: objectMemory wordSize negated do:
+				[:addr| | index |
+				index := rcvrAddress - addr / objectMemory wordSize + numArgs.
+				index <= numTemps
+					ifTrue: [self printFrameOop: 'temp' index: index - 1 at: addr]
+					ifFalse: [self printFrameOop: ((self frameIsBlockActivation: theFP)
+													ifTrue: ['temp/stck']
+													ifFalse: ['stck'])
+								at: addr]]]
+		ifFalse:
+			[rcvrAddress - objectMemory wordSize to: theSP by: objectMemory wordSize negated do:
+				[:addr| | index |
+				index := rcvrAddress - addr / objectMemory wordSize + numArgs.
+				index <= numTemps
+					ifTrue: [
+						| tempName it |
+						tempName := 'temp', (index - 1) printString.
+						it := self surrogateForOop: addr.
+						fieldList add: (GTInspectorDynamicNode
+							hostObject: self
+							label: tempName
+							value: it)]
+					ifFalse: [self printFrameOop: ((self frameIsBlockActivation: theFP)
+													ifTrue: ['temp/stck']
+													ifFalse: ['stck'])
+								at: addr]]].
+
+
+	
+
+	^fieldList
+]
+
+{ #category : #'debug printing' }
+CoInterpreter >> variablePairsIFrameFP: theFP [
+	| theMethod |
+	theMethod := self frameMethodObject: theFP.
+	^self
+		variablePairsFP: theFP
+		method: theMethod
+		methodEnd: (theMethod + (objectMemory sizeBitsOfSafe: theMethod))
+		numArgs: (self iframeNumArgs: theFP)
+		numTemps: (self tempCountOf: theMethod)
+]
+
+{ #category : #'debug printing' }
+CoInterpreter >> variablePairsMFrameFP: theFP [
+	| cogMethod homeMethod |
+	cogMethod := self mframeCogMethod: theFP.
+	homeMethod := self mframeHomeMethod: theFP.
+	^self
+		variablePairsFP: theFP
+		method: homeMethod asInteger
+		methodEnd: homeMethod asInteger + homeMethod blockSize
+		numArgs: cogMethod cmNumArgs
+		numTemps: (self temporaryCountOfMethodHeader: homeMethod methodHeader)
 ]
 
 { #category : #'frame access' }

@@ -7102,6 +7102,32 @@ StackInterpreter >> findNewMethodInClassTag: classTagArg [
 		 self addNewMethodToCache: lkupClass]
 ]
 
+{ #category : #'debug printing' }
+StackInterpreter >> findSPFor: theFP [
+	| thePage frameAbove theSP |
+	frameAbove := nil.
+	theFP = framePointer ifTrue: [^stackPointer].
+	thePage := stackPages stackPageFor: theFP.
+			 (stackPages isFree: thePage) ifTrue:
+				[self printHexPtr: theFP; print: ' is on a free page?!'; cr.
+				 ^nil].
+			 (thePage ~= stackPage
+			  and: [theFP = thePage headFP])
+				ifTrue: [theSP := thePage headSP]
+				ifFalse:
+					[frameAbove := self safeFindFrameAbove: theFP
+										on: thePage
+										startingFrom: ((thePage = stackPage
+														and: [framePointer
+																between: thePage realStackLimit
+																and: thePage baseAddress])
+														ifTrue: [framePointer]
+														ifFalse: [thePage headFP]).
+					 theSP := frameAbove ifNotNil:
+								[self frameCallerSP: frameAbove]].
+		^theSP
+]
+
 { #category : #'frame access' }
 StackInterpreter >> findSPOf: theFP on: thePage [
 	"Search for the stack pointer for theFP.  This points to the hottest item on the frame's stack.

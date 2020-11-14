@@ -3604,6 +3604,11 @@ CogVMSimulator >> startOfMemory [
 	self shouldNotImplement
 ]
 
+{ #category : #'debug printing' }
+CogVMSimulator >> surrogateForOop: address [
+	^SqueakObjectSurrogate oop: (stackPages longAt: address) cointerpreter: self
+]
+
 { #category : #'simulation only' }
 CogVMSimulator >> systemAttributes [
 	^systemAttributes
@@ -3698,6 +3703,28 @@ CogVMSimulator >> testWithBytecodePrint [
 	self testBreakCount: -1 printSends: true printFrames: false printBytecodes: true
 ]
 
+{ #category : #'as yet unclassified' }
+CogVMSimulator >> theNameOfClass: oop count: cnt [ 
+	| oldTranscript answer |
+	oldTranscript := transcript. "obviously this is crap.  I think this should be refactored into something like OopSurrogate"
+	transcript := WriteStream on: String new.
+	self printNameOfClass: oop count: cnt.
+	answer := transcript contents.
+	transcript := oldTranscript.
+	^answer
+]
+
+{ #category : #'as yet unclassified' }
+CogVMSimulator >> theStringOf: oop [
+	| oldTranscript answer |
+	oldTranscript := transcript. "obviously this is crap.  I think this should be refactored into something like OopSurrogate"
+	transcript := WriteStream on: String new.
+	self printStringOf: oop.
+	answer := transcript contents.
+	transcript := oldTranscript.
+	^answer
+]
+
 { #category : #'multi-threading simulation switch' }
 CogVMSimulator >> threadIdFieldOf: aProcess [
 	"This method includes or excludes CoInterpreterMT methods as required.
@@ -3749,6 +3776,11 @@ CogVMSimulator >> toggleTranscript [
 	transcript := transcript = Transcript
 					ifTrue: [transcriptPane model]
 					ifFalse: [Transcript]
+]
+
+{ #category : #'debug printing' }
+CogVMSimulator >> topFrame [
+	^FrameSurrogate fp: framePointer cointerpreter: self
 ]
 
 { #category : #'simulation only' }
