@@ -39,3 +39,23 @@ must be understood in light of this cross-dialect compatibility.
 This file is the Tacog README; this is so that people can
 save their precious time identifying what this branch is for.
 The main OpenSmalltalkVM README is OpenSmalltalkVM.md.
+
+## How to load
+
+### ...into Pharo
+
+````
+Metacello new
+  baseline: 'VMMaker';
+  repository: 'github://shingarov/opensmalltalk-vm:baseline-for-hackathon';
+  load.
+````
+Don't forget to follow the
+[instructions to install ISA descriptions](https://github.com/shingarov/Pharo-ArchC/blob/pure-z3/README.md).
+
+After that, you can try:
+````
+ArchCOpalTest finishLoading.
+ClyPDLEnvironmentPlugin initialize.
+````
+and verify if the browser shows the "tools" icon next to the assembly methods in `ArchCOpalTest`.
