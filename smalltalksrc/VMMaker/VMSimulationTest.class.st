@@ -1,6 +1,9 @@
 Class {
 	#name : #VMSimulationTest,
 	#superclass : #TestCase,
+	#instVars : [
+		'image'
+	],
 	#category : #'VMMaker-Doodles'
 }
 
@@ -23,6 +26,12 @@ TestCase defaultTimeLimit: 100 years.
 "
 ]
 
+{ #category : #running }
+VMSimulationTest >> setUp [
+	image := OSEnvironment current getEnv: 'COG_READER_IMAGE'.
+	self assert: image asFileReference exists.
+]
+
 { #category : #tests }
 VMSimulationTest >> testARM [
 	| cos |
@@ -36,7 +45,7 @@ cos := CogVMSimulator newWithOptions: #(
 										MULTIPLEBYTECODESETS true),
 										{#ISA. #ARMv5}.
 "cos desiredNumStackPages: 8."
-cos openOn: '/home/boris/r.1.image'.
+cos openOn: image.
 cos openAsMorph; run
 ]
 
@@ -53,6 +62,6 @@ cos := CogVMSimulator newWithOptions: #(
 										MULTIPLEBYTECODESETS true),
 										{#ISA. #POWER}.
 "cos desiredNumStackPages: 8."
-cos openOn: '/home/boris/r.1.image'.
+cos openOn: image.
 cos openAsMorph; run
 ]
