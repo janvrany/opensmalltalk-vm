@@ -16,3 +16,5 @@ pharo
 pharo-local/
 pharo-ui
 pharo-vm/
+VMMaker.*
+image/*
