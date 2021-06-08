@@ -1,0 +1,40 @@
+[submodule "3rdparty/MachineArithmetic"]
+	path = 3rdparty/MachineArithmetic
+	url = https://github.com/shingarov/MachineArithmetic.git
+[submodule "3rdparty/ArchC"]
+	path = 3rdparty/ArchC
+	url = https://github.com/shingarov/Pharo-ArchC.git
+[submodule "3rdparty/SmallRSP"]
+	path = 3rdparty/SmallRSP
+	url = https://github.com/shingarov/SmallRSP.git
+[submodule "3rdparty/pdl/arm"]
+	path = 3rdparty/pdl/arm
+	url = https://github.com/shingarov/arm.git
+	branch = good
+[submodule "3rdparty/pdl/x86"]
+	path = 3rdparty/pdl/x86
+	url = https://github.com/shingarov/x86.git
+	branch = bee
+[submodule "3rdparty/pdl/powerpc"]
+	path = 3rdparty/pdl/powerpc
+	url = https://github.com/shingarov/powerpc.git
+	branch = hackathon
+[submodule "3rdparty/pdl/riscv"]
+	path = 3rdparty/pdl/riscv
+	url = https://github.com/shingarov/riscv.git
+	branch = master
+[submodule "3rdparty/pdl/mips"]
+	path = 3rdparty/pdl/mips
+	url = https://github.com/shingarov/mips.git
+	branch = master
+[submodule "3rdparty/pdl/sparc"]
+	path = 3rdparty/pdl/sparc
+	url = https://github.com/shingarov/sparc.git
+	branch = gdb-descriptors
+[submodule "3rdparty/gem5"]
+	path = 3rdparty/gem5
+	url = https://github.com/shingarov/gem5.git
+	branch = ta-cog-POWER
+[submodule "3rdparty/thinshell"]
+	path = 3rdparty/thinshell
+	url = https://github.com/shingarov/thinshell.git
